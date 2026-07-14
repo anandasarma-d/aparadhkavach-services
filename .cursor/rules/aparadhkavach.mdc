@@ -1,0 +1,37 @@
+---
+description: AparadhKavach governing conventions for aparadhkavach-services
+globs:
+alwaysApply: true
+---
+
+# Source of truth
+
+`AGENTS.md` at this repo's root is the authoritative source for architecture,
+naming, RBAC, and testing conventions — derived from ADR-024 and the specific
+ADRs it defers to. Read it before generating or modifying any code. This file
+adds Cursor-specific working behaviors only; it does not restate `AGENTS.md`.
+
+# Working behaviors specific to this repo
+
+- **Before creating a new class or package, check if the capability belongs
+  in an existing module first.** This repo's module boundaries (§2 of
+  AGENTS.md) are enforced by ArchUnit — a new file in the wrong package fails
+  the build, not just a review. When unsure which of the 7 modules something
+  belongs to, ask rather than guess.
+- **When scaffolding a new endpoint, always generate the RBAC matrix
+  implication alongside it** — state explicitly which of the 4 roles get
+  access, matching the pattern of the nearest existing similar endpoint. Never
+  leave this unstated for a human to fill in later (this exact gap happened
+  once already this project — a new endpoint shipped with no RBAC row).
+- **Never introduce a new external dependency without checking `AGENTS.md`
+  §5 and the References page first** — e.g., don't add a JSON web token
+  library when `aparadhkavach-commons` already has one, don't add a second
+  circuit-breaker library when Resilience4j is already standard.
+- **When a test needs an external dependency (Claude, Sarvam, Voyage, Neo4j,
+  PgVector), default to WireMock (HTTP) or Testcontainers (DB) per AGENTS.md
+  §6 — never silently fall back to a bare Mockito interface mock** for these
+  specific integrations, even though Mockito is fine for everything else.
+- **Flag, don't silently fix, any place where existing code contradicts
+  `AGENTS.md`** (e.g., a pre-existing `_MASTER` table reference, an `/api/`
+  style path). Point it out and ask whether it's a known gap or something
+  new — don't assume either way.
