@@ -4,11 +4,28 @@ This file governs AI-assisted code generation (Cursor, Claude Code) in this repo
 
 Full reasoning lives in the AparadhKavach Notion workspace (Design & Schema Sections 1–14, ADRs 001–029). This file is the compiled, code-facing summary — if something here seems to conflict with what you'd otherwise infer, this file and the cited ADR win.
 
+## Notion Access (via MCP)
+
+**Read-only, enforced at the token level, not just by instruction.** The connected Notion integration has Read Content capability only — Insert/Update/Comment are disabled at the Notion API level. Even so: **never attempt to write, update, comment on, or create any Notion page or block, under any circumstance.** If asked to "update the Notion doc," "log this to the build log," or similar, decline and tell the person to do it via the AparadhKavach Claude Project chat instead — that is the only path by which Notion content changes, and only when Anand explicitly directs it there.
+
+This file covers **conventions only.** For actual implementation content — the real Cypher queries, prompt templates, DDL, feature lists, RBAC rules — **fetch the current version from Notion via the connected MCP before implementing.** Do not guess, do not rely on a previous session's memory of a page, and do not assume a once-fetched copy is still current — re-fetch each session.
+
+**Sections to fetch for this repo's work:**
+- Section 5.4 — physical DataStore/Neo4j/PgVector schema (DDL, node/relationship properties)
+- Section 6.5 — Cypher query library (Graph Intelligence module)
+- Section 6.6 — Claude prompt templates + context block structure (Claude AI Bridge module)
+- Section 6.7 — full API contract (every endpoint, request/response shape)
+- Section 7.5 — QuickML feature lists (risk scorer, hotspot forecaster)
+- Section 8.2 — RBAC permission matrix
+- The ADR page — for any capability without an obvious existing pattern in this file
+
+**Treat fetched Notion content as authoritative, not a starting point to improve on.** If a documented approach seems suboptimal, incomplete, or unclear, say so and ask — do not silently implement a different approach because it seems better, even if it might genuinely be better. Given the project timeline, staying consistent with what's already decided matters more than local optimization. This is the same "flag, don't silently fix" principle in §8 below, extended explicitly to Notion content.
+
 ## 1. What this system is (ADR-024 Principles 1–3)
 
 - A **Crime Intelligence Platform**, not a chatbot. Investigation and hidden-relationship discovery, not record retrieval.
 - **Neo4j and graph traversal are the primary differentiator.** Vector search (PgVector) is a supporting capability, not the core mechanism. Never default to "just do RAG" — check whether a graph traversal answers the question first.
-- Every AI-generated response must be **evidence-backed and explainable** — no unsupported conclusions, always cite FIR IDs / entity IDs, always include a reasoning summary. This is enforced structurally (see §5), not just a style preference.
+- Every AI-generated response must be **evidence-backed and explainable** — no unsupported conclusions, always cite FIR IDs / entity IDs, always include a reasoning summary. This is enforced structurally (see §6), not just a style preference.
 
 ## 2. Repo & module structure — do not restructure
 
@@ -26,7 +43,7 @@ Full reasoning lives in the AparadhKavach Notion workspace (Design & Schema Sect
 - JSON fields are **camelCase**. Table/column names are **snake_case, no `_MASTER`/`_LOG` suffix** (`firs`, `accused_persons`, `victims`, `officers`, `risk_scores`, `hotspot_forecasts`, `audit_logs`, `query_logs`, `alert_logs`, `districts`, `query_evidence`). If you see or are tempted to write `FIR_MASTER`, `ACCUSED_MASTER`, `RISK_SCORES` (uppercase), or similar — that's the pre-ADR-018 naming; it's wrong, not a valid alternative style.
 - **Every list endpoint is paginated and sortable from day one** (`pageSize`/`pageToken`, `sortBy`/`sortOrder`) — ADR-020 Decision 6. This is not deferred to "if we have time." Do not scaffold a list endpoint without these params.
 - **One error envelope shape, everywhere.** `ApiError`/`ErrorCode`/`ApiException` hierarchy from `aparadhkavach-commons`, handled by one `GlobalExceptionHandler`. `traceId` in every error body comes from the OTel span context (ADR-009), **never** from a client-supplied header — do not trust `X-Correlation-ID` for this field.
-- Full endpoint + RBAC matrix lives in Section 8.2 (Notion) — 16 endpoints as of 13 Jul 2026. Any new endpoint needs a corresponding RBAC row before it ships, not after.
+- Full endpoint + RBAC matrix lives in Section 8.2 (Notion, fetch fresh — do not assume 15 or 16 is still current). Any new endpoint needs a corresponding RBAC row before it ships, not after.
 
 ## 4. Auth, RBAC, district scoping (ADR-013, ADR-023, Section 8)
 
@@ -63,3 +80,4 @@ Full reasoning lives in the AparadhKavach Notion workspace (Design & Schema Sect
 - Don't build an agentic/multi-step Claude loop (§5) — that's v2, explicitly deferred.
 - Don't configure PgVector with an API key (§5) — it's JDBC.
 - Don't skip the ArchUnit suite or use Mockito where WireMock/Testcontainers are specified (§6).
+- Don't write to Notion under any circumstance (Notion Access, above).

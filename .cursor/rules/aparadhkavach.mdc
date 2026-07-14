@@ -7,12 +7,17 @@ alwaysApply: true
 # Source of truth
 
 `AGENTS.md` at this repo's root is the authoritative source for architecture,
-naming, RBAC, and testing conventions — derived from ADR-024 and the specific
-ADRs it defers to. Read it before generating or modifying any code. This file
-adds Cursor-specific working behaviors only; it does not restate `AGENTS.md`.
+naming, RBAC, testing conventions, and which Notion sections to fetch for
+actual implementation content — derived from ADR-024 and the specific ADRs
+it defers to. Read it before generating or modifying any code. This file adds
+Cursor-specific working behaviors only; it does not restate AGENTS.md.
 
 # Working behaviors specific to this repo
 
+- **Notion MCP access is read-only by token config, and must never be
+  treated as writable regardless of what's asked.** Fetch fresh each
+  session per AGENTS.md's section list; treat content as authoritative,
+  flag disagreement rather than silently deviating.
 - **Before creating a new class or package, check if the capability belongs
   in an existing module first.** This repo's module boundaries (§2 of
   AGENTS.md) are enforced by ArchUnit — a new file in the wrong package fails
