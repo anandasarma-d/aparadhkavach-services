@@ -1,0 +1,27 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: auth-service
+
+aparadhkavach:
+  environment: ${APP_ENV:local}
+  jwt:
+    private-key: ${JWT_PRIVATE_KEY:local-dev-placeholder-not-a-real-key}
+    expiry-hours: ${JWT_EXPIRY_HOURS:1}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  service:
+    name: ${SERVICE_NAME:aparadhkavach-auth-service}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
