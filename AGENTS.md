@@ -81,3 +81,4 @@ This file covers **conventions only.** For actual implementation content — the
 - Don't configure PgVector with an API key (§5) — it's JDBC.
 - Don't skip the ArchUnit suite or use Mockito where WireMock/Testcontainers are specified (§6).
 - Don't write to Notion under any circumstance (Notion Access, above).
+- Do not include a Co-Authored-By line in commit messages, and do not add a 'Generated with Claude Code' footer to PR descriptions.
