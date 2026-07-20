@@ -55,6 +55,23 @@ aparadhkavach:
     traversal-depth: ${GRAPH_TRAVERSAL_DEPTH:3}
   resilience:
     circuit-breaker-threshold: ${CIRCUIT_BREAKER_THRESHOLD:3}
+  # Voyage AI (ADR-025) — no native Spring AI provider exists yet, so these aren't under
+  # spring.ai.* like the Anthropic block below. Consumed by the custom EmbeddingModel
+  # wrapper once that Week 1 business logic lands (not implemented yet).
+  voyage:
+    api-key: ${VOYAGE_API_KEY:local-dev-placeholder-not-a-real-key}
+    embedding-model: ${EMBEDDING_MODEL:voyage-3-large}
+
+# Catalyst DataStore (FIR/context assembly for Claude AI Bridge) — Self Client OAuth creds
+# for local/external SDK access (External Services guide). Unused inside a deployed AppSail
+# context, where the SDK auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
 
 otel:
   exporter:
