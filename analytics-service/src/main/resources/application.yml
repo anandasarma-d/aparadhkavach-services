@@ -6,6 +6,11 @@ spring:
     name: analytics-service
 
   neo4j:
+    # TEMPORARY (2026-07-20, MVP-1 only): aparadhkavach-dev's NEO4J_URI/USERNAME/PASSWORD
+    # env vars are pointed at the staging Aura instance rather than a dev-only graph, bending
+    # the staging/production Neo4j isolation principle. No URI is hardcoded here — the actual
+    # value lives in the dev environment's externalized config. Revert to a dedicated dev
+    # instance post-MVP-1-submission.
     uri: ${NEO4J_URI:bolt://localhost:7687}
     authentication:
       username: ${NEO4J_USERNAME:neo4j}
