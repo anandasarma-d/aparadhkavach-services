@@ -8,6 +8,17 @@ spring:
 aparadhkavach:
   environment: ${APP_ENV:local}
 
+# Catalyst DataStore (audit_logs/alert_logs) + Catalyst Signals — Self Client OAuth creds
+# for local/external SDK access (External Services guide). Unused inside a deployed
+# AppSail context, where the SDK auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
+
 otel:
   exporter:
     otlp:
