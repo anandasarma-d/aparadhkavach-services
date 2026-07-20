@@ -10,6 +10,12 @@ aparadhkavach:
   jwt:
     public-key: ${JWT_PUBLIC_KEY:local-dev-placeholder-not-a-real-key}
 
+# aparadhkavach-client's origin(s), comma-separated. Local default is the Vite dev server
+# port used by DeployPathCheck; staging/prod set their own Slate origin(s) via this same var
+# (ADR-022) - never wildcarded, since requests carry an Authorization header (CorsConfig).
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
 otel:
   exporter:
     otlp:
