@@ -10,6 +10,12 @@ aparadhkavach:
   jwt:
     public-key: ${JWT_PUBLIC_KEY:local-dev-placeholder-not-a-real-key}
 
+# Downstream Spring Boot service URLs — environment-driven (ADR-022). Feature 1 routes
+# /v1/accusedPersons/** → Investigation and /v1/analytics/** → Analytics.
+downstream:
+  investigation-service-url: ${INVESTIGATION_SERVICE_URL:http://localhost:8081}
+  analytics-service-url: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
+
 # aparadhkavach-client's origin(s), comma-separated. Local default is the Vite dev server
 # port used by DeployPathCheck; staging/prod set their own Slate origin(s) via this same var
 # (ADR-022) - never wildcarded, since requests carry an Authorization header (CorsConfig).
