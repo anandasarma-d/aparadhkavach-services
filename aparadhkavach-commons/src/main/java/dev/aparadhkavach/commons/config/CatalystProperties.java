@@ -23,6 +23,8 @@ public class CatalystProperties {
   private String clientSecret;
   private String refreshToken;
   private String environment;
+  /** Catalyst API host for Self Client / third-party SDK init (ADR-021). */
+  private String projectDomain = "https://api.catalyst.zoho.com";
 
   public String getProjectId() {
     return projectId;
@@ -70,5 +72,13 @@ public class CatalystProperties {
 
   public void setEnvironment(String environment) {
     this.environment = environment;
+  }
+
+  public String getProjectDomain() {
+    return projectDomain;
+  }
+
+  public void setProjectDomain(String projectDomain) {
+    this.projectDomain = projectDomain;
   }
 }

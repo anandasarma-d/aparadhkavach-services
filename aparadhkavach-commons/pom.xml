@@ -14,7 +14,7 @@
   <packaging>jar</packaging>
 
   <name>AparadhKavach Commons</name>
-  <description>Shared error envelope (ApiError/ErrorCode/ApiException/GlobalExceptionHandler) and HeaderConstants, per ADR-020/021 (Section 6.9)</description>
+  <description>Shared error envelope (ApiError/ErrorCode/ApiException/GlobalExceptionHandler), HeaderConstants, Catalyst DataStore/ZCQL client, and risk feature helpers — ADR-020/021 (Section 6.9)</description>
 
   <dependencies>
     <!-- @RestControllerAdvice, ResponseEntity, MethodArgumentNotValidException -->
@@ -31,6 +31,39 @@
     <dependency>
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-api</artifactId>
+    </dependency>
+    <!-- Catalyst DataStore / ZCQL (Section 6.1 DataStoreClient). Old Jackson + javax.servlet
+         transitively pulled by the SDK are excluded — Spring Boot 3 manages Jackson and uses
+         jakarta.servlet; AppSail request init goes through AuthHeaderProvider instead. -->
+    <dependency>
+      <groupId>com.zoho.catalyst</groupId>
+      <artifactId>java-sdk</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-annotations</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!-- CatalystSDK.class still references javax.servlet in method signatures; Spring Boot 3
+         uses jakarta.servlet for our filters, but the SDK class must resolve at load time. -->
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>3.1.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

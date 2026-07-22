@@ -25,6 +25,13 @@
   <properties>
     <java.version>21</java.version>
     <maven.compiler.release>21</maven.compiler.release>
+    <!-- Required for unnamed @PathVariable/@RequestParam etc. to resolve by reflection -
+         this project imports spring-boot-dependencies as a BOM only (no
+         spring-boot-starter-parent), so Spring Boot's own -parameters default never
+         applied. Root-caused after AccusedPersonController's @PathVariable String
+         accusedId and RiskScoreController's identical pattern both failed at runtime
+         with "parameter name information not available via reflection". -->
+    <maven.compiler.parameters>true</maven.compiler.parameters>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <!-- Re-verified against repo1.maven.org/maven2 maven-metadata.xml on 16 Jul 2026
@@ -51,10 +58,24 @@
          incubator resolved unmanaged. -->
     <opentelemetry-api.version>1.63.0</opentelemetry-api.version>
     <opentelemetry-api-alpha.version>1.63.0-alpha</opentelemetry-api-alpha.version>
+    <!-- Catalyst Java SDK (DataStore / ZCQL). Hosted on maven.zohodl.com, not Maven Central. -->
+    <catalyst-java-sdk.version>1.15.1</catalyst-java-sdk.version>
   </properties>
+
+  <repositories>
+    <repository>
+      <id>zoho-catalyst-java-sdk</id>
+      <url>https://maven.zohodl.com</url>
+    </repository>
+  </repositories>
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>com.zoho.catalyst</groupId>
+        <artifactId>java-sdk</artifactId>
+        <version>${catalyst-java-sdk.version}</version>
+      </dependency>
       <!-- OTel core + instrumentation BOMs are imported BEFORE spring-boot-dependencies,
            deliberately: Maven resolves a same-GA collision across multiple imported BOMs
            to whichever is declared FIRST in this dependencyManagement block.
