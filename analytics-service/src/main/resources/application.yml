@@ -22,6 +22,9 @@ aparadhkavach:
     endpoint: ${QUICKML_ENDPOINT:http://localhost:9000}
   hotspot:
     alert-threshold: ${HOTSPOT_ALERT_THRESHOLD:0.70}
+  risk:
+    # Section 7.5.1 — top-N feature importance surfaced on risk score reads (ADR-021).
+    top-feature-count: ${RISK_TOP_FEATURE_COUNT:3}
 
 # Catalyst DataStore (risk_scores/hotspot_forecasts) + Catalyst QuickML — Self Client OAuth
 # creds for local/external SDK access (External Services guide). Unused inside a deployed
@@ -33,6 +36,7 @@ catalyst:
   client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
   refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
   environment: ${CATALYST_ENVIRONMENT:Development}
+  project-domain: ${CATALYST_PROJECT_DOMAIN:https://api.catalyst.zoho.com}
 
 otel:
   exporter:
