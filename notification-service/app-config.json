@@ -1,0 +1,11 @@
+{
+	"command": "sh -c 'java -jar target/notification-service.jar --server.port=$X_ZOHO_CATALYST_LISTEN_PORT'",
+	"build_path": ".",
+	"stack": "java21",
+	"env_variables": {
+		"SERVICE_NAME": "aparadhkavach-notification-service"
+	},
+	"memory": 256,
+	"scripts": {},
+	"platform": "javase"
+}
