@@ -36,6 +36,19 @@
       <groupId>dev.aparadhkavach</groupId>
       <artifactId>aparadhkavach-commons</artifactId>
     </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- AGENTS.md / Section 13.7 — WireMock for external HTTP (Analytics Service). -->
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>3.13.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

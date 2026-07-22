@@ -7,6 +7,9 @@ spring:
 
 aparadhkavach:
   environment: ${APP_ENV:local}
+  analytics:
+    # Internal base URL for Investigation → Analytics composition (Section 5.6).
+    base-url: ${ANALYTICS_BASE_URL:http://localhost:8082}
 
 # Catalyst DataStore (FIR records) — Self Client OAuth creds for local/external SDK access
 # (External Services guide). Unused inside a deployed AppSail context, where the SDK
@@ -18,6 +21,7 @@ catalyst:
   client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
   refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
   environment: ${CATALYST_ENVIRONMENT:Development}
+  project-domain: ${CATALYST_PROJECT_DOMAIN:https://api.catalyst.zoho.com}
 
 otel:
   exporter:
