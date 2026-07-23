@@ -72,6 +72,39 @@ class DownstreamProxyTest {
             .withHeader("Authorization", equalTo("Bearer test-token")));
   }
 
+  @Test
+  void stripsContentEncodingWhenDownstreamClaimsGzip() throws Exception {
+    // Mimic the Catalyst bug: decoded JSON body + leftover Content-Encoding: gzip.
+    byte[] plainJson = "{\"accusedId\":\"ACC-00044\"}".getBytes(StandardCharsets.UTF_8);
+    wireMock.stubFor(
+        get(urlEqualTo("/v1/accusedPersons/ACC-00044:riskProfile"))
+            .willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withHeader("Content-Encoding", "gzip")
+                    .withBody(plainJson)));
+
+    HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+    Mockito.when(request.getMethod()).thenReturn("GET");
+    Mockito.when(request.getRequestURI())
+        .thenReturn("/v1/accusedPersons/ACC-00044:riskProfile");
+    Mockito.when(request.getQueryString()).thenReturn(null);
+    Mockito.when(request.getInputStream())
+        .thenReturn(new DelegatingServletInputStream(new byte[0]));
+    Mockito.when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+
+    ResponseEntity<byte[]> response = proxy.forward(wireMock.baseUrl(), request);
+
+    assertEquals(200, response.getStatusCode().value());
+    assertArrayEquals(plainJson, response.getBody());
+    assertEquals("application/json", response.getHeaders().getFirst("Content-Type"));
+    assertEquals(
+        null,
+        response.getHeaders().getFirst("Content-Encoding"),
+        "must not echo Content-Encoding when body bytes are already decoded");
+  }
+
   /** Minimal ServletInputStream for mocked requests. */
   private static final class DelegatingServletInputStream
       extends jakarta.servlet.ServletInputStream {

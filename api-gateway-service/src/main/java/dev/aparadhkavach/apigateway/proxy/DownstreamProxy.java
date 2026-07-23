@@ -18,6 +18,11 @@ import org.springframework.web.client.RestClient;
 @Component
 public class DownstreamProxy {
 
+  /**
+   * Headers that must not be forwarded as-is. Includes encoding/length: RestClient yields a decoded
+   * body byte[], so echoing {@code Content-Encoding: gzip} makes browsers fail with
+   * {@code ERR_CONTENT_DECODING_FAILED} / {@code TypeError: Failed to fetch} despite HTTP 200.
+   */
   private static final Set<String> HOP_BY_HOP_HEADERS =
       Set.of(
           "connection",
@@ -29,7 +34,9 @@ public class DownstreamProxy {
           "transfer-encoding",
           "upgrade",
           "host",
-          "content-length");
+          "content-length",
+          "content-encoding",
+          "accept-encoding");
 
   private final RestClient restClient;
 
@@ -58,7 +65,12 @@ public class DownstreamProxy {
     return restClient
         .method(method)
         .uri(targetUri)
-        .headers(headers -> copyRequestHeaders(request, headers))
+        .headers(
+            headers -> {
+              copyRequestHeaders(request, headers);
+              // Prefer uncompressed downstream bodies — we return raw bytes to the browser.
+              headers.set(HttpHeaders.ACCEPT_ENCODING, "identity");
+            })
         .body(body)
         .exchange(
             (req, res) -> {
