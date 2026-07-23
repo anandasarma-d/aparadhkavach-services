@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dev.aparadhkavach</groupId>
+    <artifactId>aparadhkavach-services</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>analytics-service</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Analytics Service</name>
+  <description>Hosts the in-process, batch/ML QuickML Pipeline and Pattern Detection modules (ADR-007, Section 3.2/3.6). Pattern Detection queries Neo4j AuraDB directly via Spring Data Neo4j for temporal/cluster anomaly detection.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Pattern Detection module: temporal and cluster anomaly queries against Neo4j AuraDB
+         (Section 3.2/3.3/3.6). Section 12.5's env var inventory lists NEO4J_* as
+         "Orchestration Service only" and doesn't mention Analytics Service — flagged to Anand
+         as a Section 3 vs 12.5 inconsistency; resolved in favour of Section 3's more detailed,
+         repeated, explicit module breakdown. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-neo4j</artifactId>
+    </dependency>
+
+    <!-- OTel: all 7 deployed services (Section 9.2 / 9.2b) -->
+    <dependency>
+      <groupId>io.opentelemetry.instrumentation</groupId>
+      <artifactId>opentelemetry-spring-boot-starter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry.instrumentation</groupId>
+      <artifactId>opentelemetry-logback-mdc-1.0</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.aparadhkavach</groupId>
+      <artifactId>aparadhkavach-commons</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>analytics-service</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

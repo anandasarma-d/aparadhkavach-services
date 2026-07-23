@@ -1,0 +1,13 @@
+{
+	"command": "sh -c 'java -jar target/auth-service.jar --server.port=$X_ZOHO_CATALYST_LISTEN_PORT'",
+	"build_path": ".",
+	"stack": "java21",
+	"env_variables": {
+		"SERVICE_NAME": "aparadhkavach-auth-service",
+		"JWT_PRIVATE_KEY": "local-dev-placeholder-not-a-real-key",
+		"JWT_EXPIRY_HOURS": "1"
+	},
+	"memory": 256,
+	"scripts": {},
+	"platform": "javase"
+}

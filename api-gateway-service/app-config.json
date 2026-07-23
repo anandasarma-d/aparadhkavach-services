@@ -1,0 +1,15 @@
+{
+	"command": "sh -c 'java -jar target/api-gateway-service.jar --server.port=$X_ZOHO_CATALYST_LISTEN_PORT'",
+	"build_path": ".",
+	"stack": "java21",
+	"env_variables": {
+		"SERVICE_NAME": "aparadhkavach-api-gateway-service",
+		"JWT_PUBLIC_KEY": "local-dev-placeholder-not-a-real-key",
+		"CORS_ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,https://aparadhkavach-client-lcxojppz.onslate.in",
+		"INVESTIGATION_SERVICE_URL": "https://investigation-service-50044031746.development.catalystappsail.in",
+		"ANALYTICS_SERVICE_URL": "https://analytics-service-50044031746.development.catalystappsail.in"
+	},
+	"memory": 256,
+	"scripts": {},
+	"platform": "javase"
+}

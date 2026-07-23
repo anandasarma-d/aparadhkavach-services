@@ -1,0 +1,38 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: auth-service
+
+aparadhkavach:
+  environment: ${APP_ENV:local}
+  jwt:
+    private-key: ${JWT_PRIVATE_KEY:local-dev-placeholder-not-a-real-key}
+    expiry-hours: ${JWT_EXPIRY_HOURS:1}
+
+# Catalyst Authentication (Embedded mode) + Catalyst DataStore (officers) — Self Client
+# OAuth creds for local/external SDK access (External Services guide). Unused inside a
+# deployed AppSail context, where the SDK auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  service:
+    name: ${SERVICE_NAME:aparadhkavach-auth-service}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

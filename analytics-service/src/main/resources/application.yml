@@ -1,0 +1,54 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: analytics-service
+
+  neo4j:
+    # TEMPORARY (2026-07-20, MVP-1 only): aparadhkavach-dev's NEO4J_URI/USERNAME/PASSWORD
+    # env vars are pointed at the staging Aura instance rather than a dev-only graph, bending
+    # the staging/production Neo4j isolation principle. No URI is hardcoded here — the actual
+    # value lives in the dev environment's externalized config. Revert to a dedicated dev
+    # instance post-MVP-1-submission.
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    authentication:
+      username: ${NEO4J_USERNAME:neo4j}
+      password: ${NEO4J_PASSWORD:local-dev-placeholder}
+
+aparadhkavach:
+  environment: ${APP_ENV:local}
+  quickml:
+    endpoint: ${QUICKML_ENDPOINT:http://localhost:9000}
+  hotspot:
+    alert-threshold: ${HOTSPOT_ALERT_THRESHOLD:0.70}
+  risk:
+    # Section 7.5.1 — top-N feature importance surfaced on risk score reads (ADR-021).
+    top-feature-count: ${RISK_TOP_FEATURE_COUNT:3}
+
+# Catalyst DataStore (risk_scores/hotspot_forecasts) + Catalyst QuickML — Self Client OAuth
+# creds for local/external SDK access (External Services guide). Unused inside a deployed
+# AppSail context, where the SDK auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
+  project-domain: ${CATALYST_PROJECT_DOMAIN:https://api.catalyst.zoho.com}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  service:
+    name: ${SERVICE_NAME:aparadhkavach-analytics-service}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

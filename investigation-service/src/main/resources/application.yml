@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: investigation-service
+
+aparadhkavach:
+  environment: ${APP_ENV:local}
+  analytics:
+    # Internal base URL for Investigation → Analytics composition (Section 5.6).
+    base-url: ${ANALYTICS_BASE_URL:http://localhost:8082}
+
+# Catalyst DataStore (FIR records) — Self Client OAuth creds for local/external SDK access
+# (External Services guide). Unused inside a deployed AppSail context, where the SDK
+# auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
+  project-domain: ${CATALYST_PROJECT_DOMAIN:https://api.catalyst.zoho.com}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  service:
+    name: ${SERVICE_NAME:aparadhkavach-investigation-service}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

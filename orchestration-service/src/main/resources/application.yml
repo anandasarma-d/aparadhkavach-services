@@ -1,0 +1,89 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: orchestration-service
+
+  autoconfigure:
+    exclude:
+      # PgVectorStoreAutoConfiguration requires an EmbeddingModel bean. The custom Voyage
+      # EmbeddingModel wrapper (ADR-025 — no native Spring AI Voyage provider exists) is
+      # Week 1 business logic, out of scope for Day 5 scaffolding. The Maven dependency stays
+      # on the classpath; remove this exclusion once that wrapper bean exists.
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+
+  neo4j:
+    # TEMPORARY (2026-07-20, MVP-1 only): aparadhkavach-dev's NEO4J_URI/USERNAME/PASSWORD
+    # env vars are pointed at the staging Aura instance rather than a dev-only graph, bending
+    # the staging/production Neo4j isolation principle. No URI is hardcoded here — the actual
+    # value lives in the dev environment's externalized config. Revert to a dedicated dev
+    # instance post-MVP-1-submission.
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    authentication:
+      username: ${NEO4J_USERNAME:neo4j}
+      password: ${NEO4J_PASSWORD:local-dev-placeholder}
+
+  datasource:
+    url: ${PGVECTOR_JDBC_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${PGVECTOR_USERNAME:postgres}
+    password: ${PGVECTOR_PASSWORD:local-dev-placeholder}
+    hikari:
+      # No live PgVector instance in local scaffold verification — don't fail startup
+      # trying to open a connection pool against it.
+      initialization-fail-timeout: -1
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:local-dev-placeholder-not-a-real-key}
+      chat:
+        options:
+          model: ${CLAUDE_MODEL:claude-sonnet-4-6}
+    vectorstore:
+      pgvector:
+        index-type: IVFFLAT
+        distance-type: COSINE_DISTANCE
+        dimensions: ${EMBEDDING_DIMENSIONS:1024}
+
+aparadhkavach:
+  environment: ${APP_ENV:local}
+  sarvam:
+    stt-url: ${SARVAM_STT_URL:http://localhost:8000}
+  vector:
+    top-k: ${VECTOR_TOP_K:5}
+  graph:
+    traversal-depth: ${GRAPH_TRAVERSAL_DEPTH:3}
+  resilience:
+    circuit-breaker-threshold: ${CIRCUIT_BREAKER_THRESHOLD:3}
+  # Voyage AI (ADR-025) — no native Spring AI provider exists yet, so these aren't under
+  # spring.ai.* like the Anthropic block below. Consumed by the custom EmbeddingModel
+  # wrapper once that Week 1 business logic lands (not implemented yet).
+  voyage:
+    api-key: ${VOYAGE_API_KEY:local-dev-placeholder-not-a-real-key}
+    embedding-model: ${EMBEDDING_MODEL:voyage-3-large}
+
+# Catalyst DataStore (FIR/context assembly for Claude AI Bridge) — Self Client OAuth creds
+# for local/external SDK access (External Services guide). Unused inside a deployed AppSail
+# context, where the SDK auto-initializes from the execution context.
+catalyst:
+  project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
+  zaid: ${CATALYST_ZAID:local-dev-placeholder}
+  client-id: ${CATALYST_CLIENT_ID:local-dev-placeholder}
+  client-secret: ${CATALYST_CLIENT_SECRET:local-dev-placeholder-not-a-real-key}
+  refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
+  environment: ${CATALYST_ENVIRONMENT:Development}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  service:
+    name: ${SERVICE_NAME:aparadhkavach-orchestration-service}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
