@@ -11,7 +11,11 @@ spring:
     # the staging/production Neo4j isolation principle. No URI is hardcoded here — the actual
     # value lives in the dev environment's externalized config. Revert to a dedicated dev
     # instance post-MVP-1-submission.
+    #
+    # Aura Free (24 Jul 2026): user DB is often the instance id (e.g. 601ef9b9), not "neo4j".
+    # Set NEO4J_DATABASE to match neo4j_populate.py --database / SHOW DATABASES (D-043).
     uri: ${NEO4J_URI:bolt://localhost:7687}
+    database: ${NEO4J_DATABASE:neo4j}
     authentication:
       username: ${NEO4J_USERNAME:neo4j}
       password: ${NEO4J_PASSWORD:local-dev-placeholder}

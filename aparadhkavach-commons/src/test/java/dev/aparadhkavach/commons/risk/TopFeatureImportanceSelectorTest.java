@@ -22,8 +22,7 @@ class TopFeatureImportanceSelectorTest {
 
     assertEquals(3, top.size());
     // 0.40 tie: recidivism_interval_avg declared before crime_type_severity_max
-    assertEquals(
-        RiskFeature.RECIDIVISM_INTERVAL_AVG.featureKey(), top.keySet().iterator().next());
+    assertEquals(RiskFeature.RECIDIVISM_INTERVAL_AVG.featureKey(), top.keySet().iterator().next());
     assertEquals(
         0.40, top.get(RiskFeature.RECIDIVISM_INTERVAL_AVG.featureKey()).doubleValue(), 1e-9);
     assertEquals(
