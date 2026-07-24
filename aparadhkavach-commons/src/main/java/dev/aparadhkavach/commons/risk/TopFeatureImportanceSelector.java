@@ -28,9 +28,6 @@ public final class TopFeatureImportanceSelector {
         .limit(topN)
         .collect(
             Collectors.toMap(
-                Map.Entry::getKey,
-                Map.Entry::getValue,
-                (left, right) -> left,
-                LinkedHashMap::new));
+                Map.Entry::getKey, Map.Entry::getValue, (left, right) -> left, LinkedHashMap::new));
   }
 }

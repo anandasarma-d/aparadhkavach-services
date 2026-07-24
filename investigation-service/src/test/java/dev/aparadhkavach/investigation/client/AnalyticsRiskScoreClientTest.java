@@ -67,7 +67,10 @@ class AnalyticsRiskScoreClientTest {
   void mapsNotFound() {
     wireMock.stubFor(
         get(urlEqualTo("/v1/analytics/riskScores/ACC-missing"))
-            .willReturn(aResponse().withStatus(404).withBody("{\"error\":{\"errorCode\":\"DOM_RESOURCE_NOT_FOUND\"}}")));
+            .willReturn(
+                aResponse()
+                    .withStatus(404)
+                    .withBody("{\"error\":{\"errorCode\":\"DOM_RESOURCE_NOT_FOUND\"}}")));
 
     assertThrows(ResourceNotFoundException.class, () -> client.getRiskScore("ACC-missing"));
   }

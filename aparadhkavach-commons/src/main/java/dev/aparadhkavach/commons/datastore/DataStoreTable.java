@@ -5,6 +5,7 @@ package dev.aparadhkavach.commons.datastore;
  */
 public enum DataStoreTable {
   ACCUSED_PERSONS("accused_persons"),
+  ACCUSED_FEATURES("accused_features"),
   RISK_SCORES("risk_scores"),
   HOTSPOT_FORECASTS("hotspot_forecasts"),
   FIRS("firs"),
