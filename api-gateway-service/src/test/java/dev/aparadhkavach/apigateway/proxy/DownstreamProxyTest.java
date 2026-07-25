@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import dev.aparadhkavach.commons.header.HeaderConstants;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -47,8 +48,7 @@ class DownstreamProxyTest {
 
     HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
     Mockito.when(request.getMethod()).thenReturn("GET");
-    Mockito.when(request.getRequestURI())
-        .thenReturn("/v1/accusedPersons/ACC-00124:riskProfile");
+    Mockito.when(request.getRequestURI()).thenReturn("/v1/accusedPersons/ACC-00124:riskProfile");
     Mockito.when(request.getQueryString()).thenReturn("x=1");
     Mockito.when(request.getInputStream())
         .thenReturn(new DelegatingServletInputStream(new byte[0]));
@@ -73,6 +73,31 @@ class DownstreamProxyTest {
   }
 
   @Test
+  void forwardsCorrelationIdHeader() throws Exception {
+    wireMock.stubFor(
+        get(urlEqualTo("/v1/analytics/hotspots"))
+            .willReturn(aResponse().withStatus(200).withBody("[]")));
+
+    HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+    Mockito.when(request.getMethod()).thenReturn("GET");
+    Mockito.when(request.getRequestURI()).thenReturn("/v1/analytics/hotspots");
+    Mockito.when(request.getQueryString()).thenReturn(null);
+    Mockito.when(request.getInputStream())
+        .thenReturn(new DelegatingServletInputStream(new byte[0]));
+    Vector<String> headerNames = new Vector<>();
+    headerNames.add(HeaderConstants.X_CORRELATION_ID);
+    Mockito.when(request.getHeaderNames()).thenReturn(headerNames.elements());
+    Mockito.when(request.getHeaders(HeaderConstants.X_CORRELATION_ID))
+        .thenReturn(Collections.enumeration(Collections.singletonList("corr-demo-1")));
+
+    proxy.forward(wireMock.baseUrl(), request);
+
+    wireMock.verify(
+        getRequestedFor(urlEqualTo("/v1/analytics/hotspots"))
+            .withHeader(HeaderConstants.X_CORRELATION_ID, equalTo("corr-demo-1")));
+  }
+
+  @Test
   void stripsContentEncodingWhenDownstreamClaimsGzip() throws Exception {
     // Mimic the Catalyst bug: decoded JSON body + leftover Content-Encoding: gzip.
     byte[] plainJson = "{\"accusedId\":\"ACC-00044\"}".getBytes(StandardCharsets.UTF_8);
@@ -87,8 +112,7 @@ class DownstreamProxyTest {
 
     HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
     Mockito.when(request.getMethod()).thenReturn("GET");
-    Mockito.when(request.getRequestURI())
-        .thenReturn("/v1/accusedPersons/ACC-00044:riskProfile");
+    Mockito.when(request.getRequestURI()).thenReturn("/v1/accusedPersons/ACC-00044:riskProfile");
     Mockito.when(request.getQueryString()).thenReturn(null);
     Mockito.when(request.getInputStream())
         .thenReturn(new DelegatingServletInputStream(new byte[0]));
