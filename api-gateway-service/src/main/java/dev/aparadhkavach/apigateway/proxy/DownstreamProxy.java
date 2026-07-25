@@ -20,8 +20,8 @@ public class DownstreamProxy {
 
   /**
    * Headers that must not be forwarded as-is. Includes encoding/length: RestClient yields a decoded
-   * body byte[], so echoing {@code Content-Encoding: gzip} makes browsers fail with
-   * {@code ERR_CONTENT_DECODING_FAILED} / {@code TypeError: Failed to fetch} despite HTTP 200.
+   * body byte[], so echoing {@code Content-Encoding: gzip} makes browsers fail with {@code
+   * ERR_CONTENT_DECODING_FAILED} / {@code TypeError: Failed to fetch} despite HTTP 200.
    */
   private static final Set<String> HOP_BY_HOP_HEADERS =
       Set.of(
@@ -56,8 +56,7 @@ public class DownstreamProxy {
             ? downstreamBaseUrl.substring(0, downstreamBaseUrl.length() - 1)
             : downstreamBaseUrl;
     String query = request.getQueryString();
-    String targetUri =
-        base + request.getRequestURI() + (query != null ? "?" + query : "");
+    String targetUri = base + request.getRequestURI() + (query != null ? "?" + query : "");
 
     byte[] body = request.getInputStream().readAllBytes();
     HttpMethod method = HttpMethod.valueOf(request.getMethod());

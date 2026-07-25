@@ -1,5 +1,6 @@
 package dev.aparadhkavach.apigateway.config;
 
+import dev.aparadhkavach.commons.header.HeaderConstants;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -27,6 +28,7 @@ public class CorsConfig implements WebMvcConfigurer {
         .allowedOrigins(corsProperties.getAllowedOrigins().toArray(new String[0]))
         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .allowedHeaders("*")
+        .exposedHeaders(HeaderConstants.X_CORRELATION_ID)
         .allowCredentials(true);
   }
 }

@@ -23,6 +23,10 @@ catalyst:
   environment: ${CATALYST_ENVIRONMENT:Development}
   project-domain: ${CATALYST_PROJECT_DOMAIN:https://api.catalyst.zoho.com}
 
+# OpenTelemetry: instrumentation stays on the classpath, but export is OFF by default so we
+# never spam ConnectException when no OTLP collector is reachable (e.g. AppSail has none at
+# localhost:4318). To ship telemetry, set OTEL_*_EXPORTER=otlp + OTEL_EXPORTER_OTLP_ENDPOINT
+# to a real collector. See Auto/16-Observability-Operations-Implementation.md.
 otel:
   exporter:
     otlp:
@@ -30,9 +34,11 @@ otel:
   service:
     name: ${SERVICE_NAME:aparadhkavach-investigation-service}
   traces:
-    exporter: otlp
+    exporter: ${OTEL_TRACES_EXPORTER:none}
   metrics:
-    exporter: otlp
+    exporter: ${OTEL_METRICS_EXPORTER:none}
+  logs:
+    exporter: ${OTEL_LOGS_EXPORTER:none}
 
 logging:
   level:
