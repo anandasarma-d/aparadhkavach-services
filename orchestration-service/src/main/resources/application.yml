@@ -61,6 +61,7 @@ aparadhkavach:
     stt-url: ${SARVAM_STT_URL:http://localhost:8000}
   vector:
     top-k: ${VECTOR_TOP_K:5}
+    max-top-k: ${VECTOR_MAX_TOP_K:10}
   graph:
     # D-060: AppSail blackholes outbound Bolt 7687 (requests hang → Catalyst 408), so the
     # network endpoint talks to Aura via the HTTPS Query API (443) by default. Set
