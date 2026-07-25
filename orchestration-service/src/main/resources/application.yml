@@ -12,6 +12,12 @@ spring:
       # Week 1 business logic, out of scope for Day 5 scaffolding. The Maven dependency stays
       # on the classpath; remove this exclusion once that wrapper bean exists.
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+      # D-060: do not create a Bolt Driver on AppSail (blackholed 7687 → cold-start 408).
+      # Keep these as YAML list entries only — do not override spring.autoconfigure.exclude
+      # from Java (CSV PropertySource broke PgVector exclude → boot crash / Catalyst 503).
+      - org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jRepositoriesAutoConfiguration
 
   neo4j:
     # TEMPORARY (2026-07-20, MVP-1 only): aparadhkavach-dev's NEO4J_URI/USERNAME/PASSWORD
@@ -56,7 +62,14 @@ aparadhkavach:
   vector:
     top-k: ${VECTOR_TOP_K:5}
   graph:
+    # D-060: AppSail blackholes outbound Bolt 7687 (requests hang → Catalyst 408), so the
+    # network endpoint talks to Aura via the HTTPS Query API (443) by default. Set
+    # GRAPH_TRANSPORT=bolt for local driver-based access.
+    transport: ${GRAPH_TRANSPORT:http}
     traversal-depth: ${GRAPH_TRAVERSAL_DEPTH:3}
+    network-default-depth: ${GRAPH_NETWORK_DEFAULT_DEPTH:1}
+    network-max-depth: ${GRAPH_NETWORK_MAX_DEPTH:2}
+    network-max-nodes: ${GRAPH_NETWORK_MAX_NODES:50}
   resilience:
     circuit-breaker-threshold: ${CIRCUIT_BREAKER_THRESHOLD:3}
   # Voyage AI (ADR-025) — no native Spring AI provider exists yet, so these aren't under

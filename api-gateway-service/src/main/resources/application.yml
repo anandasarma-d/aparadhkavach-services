@@ -12,9 +12,11 @@ aparadhkavach:
 
 # Downstream Spring Boot service URLs — environment-driven (ADR-022). Feature 1 routes
 # /v1/accusedPersons/** → Investigation and /v1/analytics/** → Analytics.
+# K2: /v1/entities/** → Orchestration (set ORCHESTRATION_SERVICE_URL on AppSail — A9).
 downstream:
   investigation-service-url: ${INVESTIGATION_SERVICE_URL:http://localhost:8081}
   analytics-service-url: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
+  orchestration-service-url: ${ORCHESTRATION_SERVICE_URL:http://localhost:8083}
 
 # aparadhkavach-client's origin(s), comma-separated. Local default is the Vite dev server
 # port used by DeployPathCheck; staging/prod set their own Slate origin(s) via this same var

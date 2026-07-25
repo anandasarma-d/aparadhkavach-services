@@ -82,3 +82,4 @@ This file covers **conventions only.** For actual implementation content — the
 - Don't skip the ArchUnit suite or use Mockito where WireMock/Testcontainers are specified (§6).
 - Don't write to Notion under any circumstance (Notion Access, above).
 - Do not include a Co-Authored-By line in commit messages, and do not add a 'Generated with Claude Code' footer to PR descriptions.
+- **Never `git add` / commit `*/app-config.json` (25 Jul policy).** Files stay tracked (not gitignored). Anand keeps real AppSail env (Aura / Supabase / keys) in local working copies for deploy; Auto must leave those diffs unstaged. Committed HEAD may still hold placeholders — that is fine. Do not `git checkout -- **/app-config.json` to "clean up" Anand's local cloud values.

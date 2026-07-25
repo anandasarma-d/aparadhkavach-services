@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Single entry point for client requests (Section 6.1). Routes Feature 1 path prefixes to
  * downstream services — {@code /v1/accusedPersons/**} → Investigation, {@code /v1/analytics/**} →
- * Analytics. No JWT/RBAC here (out of scope for MVP-1).
+ * Analytics, {@code /v1/entities/**} → Orchestration (K2). No JWT/RBAC here (out of scope for
+ * MVP-1).
  */
 @RestController
 public class GatewayController {
@@ -34,5 +35,11 @@ public class GatewayController {
   @RequestMapping("/v1/analytics/**")
   public ResponseEntity<byte[]> routeToAnalytics(HttpServletRequest request) throws IOException {
     return downstreamProxy.forward(downstreamServices.getAnalyticsServiceUrl(), request);
+  }
+
+  @RequestMapping("/v1/entities/**")
+  public ResponseEntity<byte[]> routeToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }
 }
