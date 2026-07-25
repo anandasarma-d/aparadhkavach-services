@@ -1,12 +1,12 @@
 {
-	"command": "sh -c 'java -jar target/investigation-service.jar --server.port=$X_ZOHO_CATALYST_LISTEN_PORT'",
-	"build_path": ".",
-	"stack": "java21",
-	"env_variables": {
-		"SERVICE_NAME": "aparadhkavach-investigation-service",
-		"ANALYTICS_BASE_URL": "https://analytics-service-50044031746.development.catalystappsail.in"
-	},
-	"memory": 256,
-	"scripts": {},
-	"platform": "javase"
+  "command": "sh -c 'java -jar target/investigation-service.jar --server.port=$X_ZOHO_CATALYST_LISTEN_PORT'",
+  "build_path": ".",
+  "stack": "java21",
+  "env_variables": {
+    "SERVICE_NAME": "aparadhkavach-investigation-service",
+    "ANALYTICS_BASE_URL": "http://localhost:8082"
+  },
+  "memory": 256,
+  "scripts": {},
+  "platform": "javase"
 }

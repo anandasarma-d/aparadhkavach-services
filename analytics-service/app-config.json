@@ -6,8 +6,8 @@
     "SERVICE_NAME": "aparadhkavach-analytics-service",
     "NEO4J_URI": "bolt://localhost:7687",
     "NEO4J_USERNAME": "neo4j",
-    "NEO4J_PASSWORD": "local-dev-placeholder",
-    "QUICKML_ENDPOINT": "http://localhost:9000",
+    "NEO4J_PASSWORD": "local-dev-placeholder-not-a-real-secret",
+    "QUICKML_ENDPOINT": "http://localhost:9000/quickml/predict",
     "HOTSPOT_ALERT_THRESHOLD": "0.70",
     "NEO4J_DATABASE": "neo4j"
   },
