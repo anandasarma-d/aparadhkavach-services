@@ -13,6 +13,7 @@ public class DownstreamServicesProperties {
 
   private String investigationServiceUrl;
   private String analyticsServiceUrl;
+  private String orchestrationServiceUrl;
 
   public String getInvestigationServiceUrl() {
     return investigationServiceUrl;
@@ -28,5 +29,13 @@ public class DownstreamServicesProperties {
 
   public void setAnalyticsServiceUrl(String analyticsServiceUrl) {
     this.analyticsServiceUrl = analyticsServiceUrl;
+  }
+
+  public String getOrchestrationServiceUrl() {
+    return orchestrationServiceUrl;
+  }
+
+  public void setOrchestrationServiceUrl(String orchestrationServiceUrl) {
+    this.orchestrationServiceUrl = orchestrationServiceUrl;
   }
 }
