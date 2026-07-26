@@ -35,3 +35,15 @@ Do **not** commit live secrets. A local cheat sheet may live in a **gitignored**
 curl -sS "$GW/health"
 curl -sS "$GW/v1/accusedPersons/ACC-00040:riskProfile" -D - -o /dev/null | rg -i correlation
 ```
+
+## Demo keep-warm (recording / live walkthrough)
+
+AppSail scales to zero after ~5 minutes idle. For Screen Studio / live demos, run this on a **second laptop** so Gateway + Investigation + Orchestration + Neo4j/PgVector paths stay hot:
+
+```bash
+./appsail-demo-keep-warm.sh          # loop every 180s
+./appsail-demo-keep-warm.sh --once   # single sweep
+INTERVAL_SECONDS=180 ./appsail-demo-keep-warm.sh
+```
+
+Start recording when the script prints `WARM WINDOW STARTED` (after a sweep finishes), so keep-warm traffic does not compete with the demo clicks.
