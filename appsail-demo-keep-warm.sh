@@ -1,33 +1,46 @@
 #!/usr/bin/env bash
 #
-# Keep the AparadhKavach MVP-1 demo path warm during rehearsal/recording.
+# Keep AparadhKavach demo paths warm during rehearsal/recording.
+#
+# Defaults = Lane B workbench (MVP-2). Override for Lane A judge stack:
+#   GW=...AN=...IN=...ORCH=... ./appsail-demo-keep-warm.sh
 #
 # Usage:
 #   ./appsail-demo-keep-warm.sh
 #   ./appsail-demo-keep-warm.sh --once
-#   INTERVAL_SECONDS=180 ./appsail-demo-keep-warm.sh
+#   INTERVAL_SECONDS=120 ./appsail-demo-keep-warm.sh
 #
-# The default loop performs a full sweep, then waits three minutes before
-# starting the next one. Start recording as soon as "WARM WINDOW STARTED"
-# appears so feature requests do not overlap the recording.
+# Feature paths (not /health alone) — D-071 / D-064: Similar cold → 408
+# EXECUTION_TIME_EXCEEDED unless Orch/Gateway similarCases is warmed first.
+#
+# Start recording as soon as "WARM WINDOW STARTED" appears.
 
 set -u
 
-GW="${GW:-https://api-gateway-service-50044031746.development.catalystappsail.in}"
-AN="${AN:-https://analytics-service-50044031746.development.catalystappsail.in}"
-IN="${IN:-https://investigation-service-50044031746.development.catalystappsail.in}"
-ORCH="${ORCH:-https://orchestration-service-50044031746.development.catalystappsail.in}"
+# Lane B (aparadhkavach-workbench / domain 50044400287)
+GW="${GW:-https://api-gateway-service-50044400287.development.catalystappsail.in}"
+AN="${AN:-https://analytics-service-50044400287.development.catalystappsail.in}"
+IN="${IN:-https://investigation-service-50044400287.development.catalystappsail.in}"
+ORCH="${ORCH:-https://orchestration-service-50044400287.development.catalystappsail.in}"
 
-INTERVAL_SECONDS="${INTERVAL_SECONDS:-180}"
-CONNECT_TIMEOUT_SECONDS="${CONNECT_TIMEOUT_SECONDS:-10}"
-MAX_TIME_SECONDS="${MAX_TIME_SECONDS:-40}"
+# Demo IDs locked for Lane B rehearsal (Slate screenshots 28 Jul)
+NET_ACCUSED="${NET_ACCUSED:-ACC-00044}"
+RISK_A="${RISK_A:-ACC-00040}"
+RISK_B="${RISK_B:-ACC-00124}"
+SIM_A="${SIM_A:-FIR-003276}"
+SIM_B="${SIM_B:-FIR-002683}"
+
+INTERVAL_SECONDS="${INTERVAL_SECONDS:-120}"
+CONNECT_TIMEOUT_SECONDS="${CONNECT_TIMEOUT_SECONDS:-15}"
+# Similar cold path can need >40s before AppSail 408 — allow headroom for warm attempts
+MAX_TIME_SECONDS="${MAX_TIME_SECONDS:-90}"
 
 MODE="loop"
 case "${1:-}" in
   "") ;;
   --once) MODE="once" ;;
   -h|--help)
-    awk 'NR >= 2 && NR <= 11 { sub(/^# ?/, ""); print }' "$0"
+    awk 'NR >= 2 && NR <= 16 { sub(/^# ?/, ""); print }' "$0"
     exit 0
     ;;
   *)
@@ -66,12 +79,30 @@ request() {
   if (( curl_exit == 0 )); then
     local code="${result%%|*}"
     local elapsed="${result#*|}"
-    printf "  %-26s HTTP %-3s  %7ss\n" "$label" "$code" "$elapsed"
+    printf "  %-28s HTTP %-3s  %7ss\n" "$label" "$code" "$elapsed"
     [[ "$code" =~ ^2 ]]
   else
-    printf "  %-26s ERROR curl=%s\n" "$label" "$curl_exit"
+    printf "  %-28s ERROR curl=%s\n" "$label" "$curl_exit"
     return 1
   fi
+}
+
+# AppSail often 408s the *first* Gateway→Orch call even after Orch direct is warm
+# (Gateway or second instance cold). Retry until 2xx or attempts exhausted.
+request_retry() {
+  local label="$1"
+  local url="$2"
+  local attempts="${3:-4}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if request "${label} (try ${i}/${attempts})" "$url"; then
+      return 0
+    fi
+    if ((i < attempts)); then
+      sleep 2
+    fi
+  done
+  return 1
 }
 
 sweep=0
@@ -82,27 +113,38 @@ while :; do
 
   echo
   echo "=== AparadhKavach demo warm-up #${sweep} — ${started_at} ==="
+  echo "Targets: GW=${GW}"
   echo "Direct service health:"
   request "Gateway health"       "$GW/health"   || failures=$((failures + 1))
   request "Analytics health"     "$AN/health"   || failures=$((failures + 1))
   request "Investigation health" "$IN/health"   || failures=$((failures + 1))
   request "Orchestration health" "$ORCH/health" || failures=$((failures + 1))
 
-  echo "Demo features through Gateway:"
-  request "Risk ACC-00040" \
-    "$GW/v1/accusedPersons/ACC-00040:riskProfile" || failures=$((failures + 1))
-  request "Risk ACC-00046" \
-    "$GW/v1/accusedPersons/ACC-00046:riskProfile" || failures=$((failures + 1))
+  echo "Feature warm (Orch first — Neo4j Network + PgVector Similar; D-071/D-063/D-064):"
+  request "Orch Network d1 ${NET_ACCUSED}" \
+    "$ORCH/v1/entities/${NET_ACCUSED}/network?depth=1" || failures=$((failures + 1))
+  request "Orch Network d2 ${NET_ACCUSED}" \
+    "$ORCH/v1/entities/${NET_ACCUSED}/network?depth=2" || failures=$((failures + 1))
+  request "Orch Similar ${SIM_A}" \
+    "$ORCH/v1/firs/${SIM_A}/similarCases?limit=5" || failures=$((failures + 1))
+  request "Orch Similar ${SIM_B}" \
+    "$ORCH/v1/firs/${SIM_B}/similarCases?limit=5" || failures=$((failures + 1))
+
+  echo "Demo features through Gateway (retry on 408 — D-063/D-064):"
+  request_retry "Risk ${RISK_A}" \
+    "$GW/v1/accusedPersons/${RISK_A}:riskProfile" || failures=$((failures + 1))
+  request "Risk ${RISK_B}" \
+    "$GW/v1/accusedPersons/${RISK_B}:riskProfile" || failures=$((failures + 1))
   request "Hotspots" \
-    "$GW/v1/analytics/hotspots" || failures=$((failures + 1))
-  request "Network depth 1" \
-    "$GW/v1/entities/ACC-00040/network?depth=1" || failures=$((failures + 1))
-  request "Network depth 2" \
-    "$GW/v1/entities/ACC-00040/network?depth=2" || failures=$((failures + 1))
-  request "Similar FIR-002683" \
-    "$GW/v1/firs/FIR-002683/similarCases?limit=5" || failures=$((failures + 1))
-  request "Similar FIR-003276" \
-    "$GW/v1/firs/FIR-003276/similarCases?limit=5" || failures=$((failures + 1))
+    "$GW/v1/analytics/hotspots?limit=20" || failures=$((failures + 1))
+  request_retry "Network depth 1 ${NET_ACCUSED}" \
+    "$GW/v1/entities/${NET_ACCUSED}/network?depth=1" || failures=$((failures + 1))
+  request_retry "Network depth 2 ${NET_ACCUSED}" \
+    "$GW/v1/entities/${NET_ACCUSED}/network?depth=2" || failures=$((failures + 1))
+  request_retry "Similar ${SIM_A}" \
+    "$GW/v1/firs/${SIM_A}/similarCases?limit=5" || failures=$((failures + 1))
+  request_retry "Similar ${SIM_B}" \
+    "$GW/v1/firs/${SIM_B}/similarCases?limit=5" || failures=$((failures + 1))
 
   echo
   if (( failures == 0 )); then
