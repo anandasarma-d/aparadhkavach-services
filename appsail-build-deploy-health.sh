@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Build / deploy / health for the MVP-1 Java AppSail quartet.
 # Companion: aparadhkavach-docs/Auto/11-AppSail-F1-Deploy-Replay.md
+# Phase 2 / Lane B: aparadhkavach-docs/Auto/mvp2/06-AppSail-Deploy-Replay.md
 #
 # Usage (from this repo root):
+#   ./appsail-build-deploy-health.sh --project aparadhkavach-workbench --deploy [--only MODULE] [--health]
 #   ./appsail-build-deploy-health.sh --build-deploy [--only MODULE] [--health]
 #       Build jars, deploy with each module's app-config.json AS-IS (pushes
 #       env_variables to Catalyst), then git-checkout app-config.json back to
@@ -20,9 +22,13 @@
 # MODULE names: analytics-service | investigation-service |
 #               api-gateway-service | orchestration-service
 #
-# Env overrides (optional):
-#   CATALYST_PROJECT=aparadhkavach-dev
-#   AN / IN / GW / ORCH   — AppSail base URLs (no trailing slash)
+# Project targeting (deploy always uses --project; do not rely on project:use alone):
+#   --project NAME              preferred (e.g. aparadhkavach-workbench)
+#   CATALYST_PROJECT=NAME       env equivalent if --project omitted
+#   default                     aparadhkavach-dev (Lane A / judge)
+#
+# Health URL defaults are derived from .catalystrc domain id for --project when
+# AN / IN / GW / ORCH are unset. Override explicitly if a URL differs.
 #
 # Notes:
 #   - Catalyst CLI has no "skip env" flag; --deploy strips env_variables for
@@ -39,13 +45,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-CATALYST_PROJECT="${CATALYST_PROJECT:-aparadhkavach-dev}"
-REPORT="${REPORT:-$ROOT/appsail-health-last.txt}"
+# Preserve caller URL overrides (may be empty).
+_AN_OVERRIDE="${AN-}"
+_IN_OVERRIDE="${IN-}"
+_GW_OVERRIDE="${GW-}"
+_ORCH_OVERRIDE="${ORCH-}"
+_PROJECT_FROM_ENV="${CATALYST_PROJECT-}"
 
-AN="${AN:-https://analytics-service-50044031746.development.catalystappsail.in}"
-IN="${IN:-https://investigation-service-50044031746.development.catalystappsail.in}"
-GW="${GW:-https://api-gateway-service-50044031746.development.catalystappsail.in}"
-ORCH="${ORCH:-https://orchestration-service-50044031746.development.catalystappsail.in}"
+REPORT="${REPORT:-$ROOT/appsail-health-last.txt}"
 
 ALL_MODULES=(
   analytics-service
@@ -59,9 +66,10 @@ DO_DEPLOY=0
 DO_HEALTH=0
 DEPLOY_MODE=""   # "as-is" | "code-only"
 ONLY_MODULE=""
+PROJECT_ARG=""
 
 usage() {
-  sed -n '2,36p' "$0"
+  sed -n '2,45p' "$0"
 }
 
 if [[ $# -eq 0 ]]; then
@@ -93,6 +101,14 @@ while [[ $# -gt 0 ]]; do
       DO_HEALTH=1
       shift
       ;;
+    --project)
+      if [[ $# -lt 2 ]]; then
+        echo "--project requires a Catalyst project name" >&2
+        exit 1
+      fi
+      PROJECT_ARG="$2"
+      shift 2
+      ;;
     --only)
       if [[ $# -lt 2 ]]; then
         echo "--only requires a module name" >&2
@@ -111,6 +127,70 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --project wins over env; env wins over Lane A default.
+CATALYST_PROJECT="${PROJECT_ARG:-${_PROJECT_FROM_ENV:-aparadhkavach-dev}}"
+
+domain_id_for_project() {
+  local name="$1"
+  if [[ ! -f "$ROOT/.catalystrc" ]] || ! command -v python3 >/dev/null 2>&1; then
+    return 1
+  fi
+  python3 - "$ROOT/.catalystrc" "$name" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+want = sys.argv[2]
+for p in data.get("projects", []):
+    if p.get("name") == want:
+        dom = (p.get("domain") or {}).get("id") or ""
+        if dom:
+            print(dom)
+            sys.exit(0)
+sys.exit(1)
+PY
+}
+
+active_project_name() {
+  if [[ ! -f "$ROOT/.catalystrc" ]] || ! command -v python3 >/dev/null 2>&1; then
+    return 1
+  fi
+  python3 - "$ROOT/.catalystrc" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+active = data.get("actives", {}).get("project")
+for p in data.get("projects", []):
+    if p.get("idx") == active:
+        print(p.get("name", ""))
+        break
+PY
+}
+
+DOMAIN_ID="$(domain_id_for_project "$CATALYST_PROJECT" || true)"
+if [[ -z "$DOMAIN_ID" ]]; then
+  # Fallback known domains if .catalystrc incomplete
+  case "$CATALYST_PROJECT" in
+    aparadhkavach-dev) DOMAIN_ID="50044031746" ;;
+    aparadhkavach-workbench) DOMAIN_ID="50044400287" ;;
+    *)
+      echo "WARNING: unknown domain id for project '${CATALYST_PROJECT}'." >&2
+      echo "         Set AN/IN/GW/ORCH explicitly for --health." >&2
+      DOMAIN_ID="50044031746"
+      ;;
+  esac
+fi
+
+AN="${_AN_OVERRIDE:-https://analytics-service-${DOMAIN_ID}.development.catalystappsail.in}"
+IN="${_IN_OVERRIDE:-https://investigation-service-${DOMAIN_ID}.development.catalystappsail.in}"
+GW="${_GW_OVERRIDE:-https://api-gateway-service-${DOMAIN_ID}.development.catalystappsail.in}"
+ORCH="${_ORCH_OVERRIDE:-https://orchestration-service-${DOMAIN_ID}.development.catalystappsail.in}"
+
+_active_name="$(active_project_name || true)"
+if [[ -n "$_active_name" && "$_active_name" != "$CATALYST_PROJECT" ]]; then
+  echo "WARNING: .catalystrc active project is '${_active_name}' but deploy target is '${CATALYST_PROJECT}'." >&2
+  echo "         Deploy uses --project \"${CATALYST_PROJECT}\" (from --project / CATALYST_PROJECT / default)." >&2
+fi
+echo "Using Catalyst project: ${CATALYST_PROJECT} (domain ${DOMAIN_ID})"
+unset _AN_OVERRIDE _IN_OVERRIDE _GW_OVERRIDE _ORCH_OVERRIDE _PROJECT_FROM_ENV _active_name
 
 if [[ "$DO_DEPLOY" -eq 1 && -z "$DEPLOY_MODE" ]]; then
   echo "Internal error: deploy requested without mode" >&2
