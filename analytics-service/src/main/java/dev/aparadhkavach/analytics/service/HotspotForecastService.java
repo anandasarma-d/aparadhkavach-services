@@ -3,8 +3,10 @@ package dev.aparadhkavach.analytics.service;
 import dev.aparadhkavach.analytics.dto.HotspotResource;
 import dev.aparadhkavach.analytics.dto.HotspotsPageResource;
 import dev.aparadhkavach.analytics.model.HotspotForecastRecord;
+import dev.aparadhkavach.analytics.repository.DistrictsRepository;
 import dev.aparadhkavach.analytics.repository.HotspotForecastRepository;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,13 +16,18 @@ public class HotspotForecastService {
   static final int MAX_LIMIT = 500;
 
   private final HotspotForecastRepository hotspotForecastRepository;
+  private final DistrictsRepository districtsRepository;
 
-  public HotspotForecastService(HotspotForecastRepository hotspotForecastRepository) {
+  public HotspotForecastService(
+      HotspotForecastRepository hotspotForecastRepository,
+      DistrictsRepository districtsRepository) {
     this.hotspotForecastRepository = hotspotForecastRepository;
+    this.districtsRepository = districtsRepository;
   }
 
   /**
    * Lists hotspot forecasts. Empty table → empty {@code hotspots} (does not invent scores).
+   * {@code districtName} is resolved from DataStore {@code districts} (ROWID lookup).
    *
    * @param limit max rows to return (clamped)
    * @param pageToken opaque offset as decimal string, or null/blank for start
@@ -34,17 +41,23 @@ public class HotspotForecastService {
       return new HotspotsPageResource(List.of(), null);
     }
 
+    Map<String, String> districtNames = districtsRepository.findRowIdToNameMap();
     int end = Math.min(offset + pageSize, all.size());
     List<HotspotResource> page =
-        all.subList(offset, end).stream().map(HotspotForecastService::toResource).toList();
+        all.subList(offset, end).stream().map(r -> toResource(r, districtNames)).toList();
     String next = end < all.size() ? Integer.toString(end) : null;
     return new HotspotsPageResource(page, next);
   }
 
-  private static HotspotResource toResource(HotspotForecastRecord record) {
+  private static HotspotResource toResource(
+      HotspotForecastRecord record, Map<String, String> districtNames) {
+    String districtId = record.districtId();
+    String name =
+        districtId == null || districtId.isBlank() ? null : districtNames.get(districtId);
     return new HotspotResource(
         record.forecastId(),
-        record.districtId(),
+        districtId,
+        name,
         record.crimeType(),
         record.forecastWindow(),
         record.hotspotScore(),

@@ -7,6 +7,8 @@ import java.time.Instant;
 public record HotspotResource(
     String forecastId,
     String districtId,
+    /** Resolved from DataStore {@code districts.district_name} via ROWID; null if unknown. */
+    String districtName,
     String crimeType,
     String forecastWindow,
     BigDecimal hotspotScore,
