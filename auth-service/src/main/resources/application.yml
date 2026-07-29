@@ -7,13 +7,16 @@ spring:
 
 aparadhkavach:
   environment: ${APP_ENV:local}
+  auth:
+    # Bootstrap only (mvp2/10). Set true on Lane B until Catalyst Embedded exchange is wired.
+    allow-dev-mint: ${AUTH_ALLOW_DEV_MINT:true}
   jwt:
+    # RSA PKCS#8 PEM. Use \n for single-line AppSail env values.
     private-key: ${JWT_PRIVATE_KEY:local-dev-placeholder-not-a-real-key}
+    # Same keypair public half — required for GET /v1/auth/me verification.
+    public-key: ${JWT_PUBLIC_KEY:local-dev-placeholder-not-a-real-key}
     expiry-hours: ${JWT_EXPIRY_HOURS:1}
 
-# Catalyst Authentication (Embedded mode) + Catalyst DataStore (officers) — Self Client
-# OAuth creds for local/external SDK access (External Services guide). Unused inside a
-# deployed AppSail context, where the SDK auto-initializes from the execution context.
 catalyst:
   project-id: ${CATALYST_PROJECT_ID:local-dev-placeholder}
   zaid: ${CATALYST_ZAID:local-dev-placeholder}
@@ -22,10 +25,6 @@ catalyst:
   refresh-token: ${CATALYST_REFRESH_TOKEN:local-dev-placeholder-not-a-real-key}
   environment: ${CATALYST_ENVIRONMENT:Development}
 
-# OpenTelemetry: instrumentation stays on the classpath, but export is OFF by default so we
-# never spam ConnectException when no OTLP collector is reachable (e.g. AppSail has none at
-# localhost:4318). To ship telemetry, set OTEL_*_EXPORTER=otlp + OTEL_EXPORTER_OTLP_ENDPOINT
-# to a real collector. See Auto/16-Observability-Operations-Implementation.md.
 otel:
   exporter:
     otlp:

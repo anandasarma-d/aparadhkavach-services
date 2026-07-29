@@ -50,6 +50,7 @@ _AN_OVERRIDE="${AN-}"
 _IN_OVERRIDE="${IN-}"
 _GW_OVERRIDE="${GW-}"
 _ORCH_OVERRIDE="${ORCH-}"
+_AUTH_OVERRIDE="${AUTH-}"
 _PROJECT_FROM_ENV="${CATALYST_PROJECT-}"
 
 REPORT="${REPORT:-$ROOT/appsail-health-last.txt}"
@@ -59,6 +60,7 @@ ALL_MODULES=(
   investigation-service
   api-gateway-service
   orchestration-service
+  auth-service
 )
 
 DO_BUILD=0
@@ -183,6 +185,7 @@ AN="${_AN_OVERRIDE:-https://analytics-service-${DOMAIN_ID}.development.catalysta
 IN="${_IN_OVERRIDE:-https://investigation-service-${DOMAIN_ID}.development.catalystappsail.in}"
 GW="${_GW_OVERRIDE:-https://api-gateway-service-${DOMAIN_ID}.development.catalystappsail.in}"
 ORCH="${_ORCH_OVERRIDE:-https://orchestration-service-${DOMAIN_ID}.development.catalystappsail.in}"
+AUTH="${_AUTH_OVERRIDE:-https://auth-service-${DOMAIN_ID}.development.catalystappsail.in}"
 
 _active_name="$(active_project_name || true)"
 if [[ -n "$_active_name" && "$_active_name" != "$CATALYST_PROJECT" ]]; then
@@ -190,7 +193,7 @@ if [[ -n "$_active_name" && "$_active_name" != "$CATALYST_PROJECT" ]]; then
   echo "         Deploy uses --project \"${CATALYST_PROJECT}\" (from --project / CATALYST_PROJECT / default)." >&2
 fi
 echo "Using Catalyst project: ${CATALYST_PROJECT} (domain ${DOMAIN_ID})"
-unset _AN_OVERRIDE _IN_OVERRIDE _GW_OVERRIDE _ORCH_OVERRIDE _PROJECT_FROM_ENV _active_name
+unset _AN_OVERRIDE _IN_OVERRIDE _GW_OVERRIDE _ORCH_OVERRIDE _AUTH_OVERRIDE _PROJECT_FROM_ENV _active_name
 
 if [[ "$DO_DEPLOY" -eq 1 && -z "$DEPLOY_MODE" ]]; then
   echo "Internal error: deploy requested without mode" >&2
@@ -365,19 +368,21 @@ if [[ "$DO_HEALTH" -eq 1 ]]; then
     printf "%-16s %s  %s\n" "$name" "$code" "$url"
   }
 
-  # Only check services we touched when --only was used; else all four.
+  # Only check services we touched when --only was used; else all five.
   if [[ -n "$ONLY_MODULE" ]]; then
     case "$ONLY_MODULE" in
       analytics-service) check analytics "$AN" ;;
       investigation-service) check investigation "$IN" ;;
       api-gateway-service) check gateway "$GW" ;;
       orchestration-service) check orchestration "$ORCH" ;;
+      auth-service) check auth "$AUTH" ;;
     esac
   else
     check analytics "$AN"
     check investigation "$IN"
     check gateway "$GW"
     check orchestration "$ORCH"
+    check auth "$AUTH"
   fi
 
   echo

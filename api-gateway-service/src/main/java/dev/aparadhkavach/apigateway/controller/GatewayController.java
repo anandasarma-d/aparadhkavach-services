@@ -9,10 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Single entry point for client requests (Section 6.1). Routes Feature 1 path prefixes to
- * downstream services — {@code /v1/accusedPersons/**} → Investigation, {@code /v1/analytics/**} →
- * Analytics, {@code /v1/entities/**} → Orchestration (K2), {@code /v1/firs/**} → Orchestration
- * (similar cases / A11). No JWT/RBAC here (out of scope for MVP-1).
+ * Single entry point for client requests (Section 6.1). Routes Feature path prefixes to
+ * downstream services. JWT/RBAC enforced by {@code JwtAuthFilter} (mvp2/10).
  */
 @RestController
 public class GatewayController {
@@ -24,6 +22,11 @@ public class GatewayController {
       DownstreamServicesProperties downstreamServices, DownstreamProxy downstreamProxy) {
     this.downstreamServices = downstreamServices;
     this.downstreamProxy = downstreamProxy;
+  }
+
+  @RequestMapping("/v1/auth/**")
+  public ResponseEntity<byte[]> routeToAuth(HttpServletRequest request) throws IOException {
+    return downstreamProxy.forward(downstreamServices.getAuthServiceUrl(), request);
   }
 
   @RequestMapping("/v1/accusedPersons/**")

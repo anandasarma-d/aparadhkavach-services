@@ -14,6 +14,7 @@ public class DownstreamServicesProperties {
   private String investigationServiceUrl;
   private String analyticsServiceUrl;
   private String orchestrationServiceUrl;
+  private String authServiceUrl;
 
   public String getInvestigationServiceUrl() {
     return investigationServiceUrl;
@@ -37,5 +38,13 @@ public class DownstreamServicesProperties {
 
   public void setOrchestrationServiceUrl(String orchestrationServiceUrl) {
     this.orchestrationServiceUrl = orchestrationServiceUrl;
+  }
+
+  public String getAuthServiceUrl() {
+    return authServiceUrl;
+  }
+
+  public void setAuthServiceUrl(String authServiceUrl) {
+    this.authServiceUrl = authServiceUrl;
   }
 }
