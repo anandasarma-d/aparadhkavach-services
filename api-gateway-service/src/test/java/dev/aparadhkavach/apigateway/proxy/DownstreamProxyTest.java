@@ -129,6 +129,50 @@ class DownstreamProxyTest {
         "must not echo Content-Encoding when body bytes are already decoded");
   }
 
+  @Test
+  void stripsDownstreamCorsHeadersAndDoesNotForwardOrigin() throws Exception {
+    wireMock.stubFor(
+        get(urlEqualTo("/v1/auth/me"))
+            .willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withHeader("Access-Control-Allow-Origin", "https://aparadhkavach-wb.onslate.in")
+                    .withHeader("Access-Control-Allow-Credentials", "true")
+                    .withHeader("X-Frame-Options", "ALLOW-FROM https://aparadhkavach-wb.onslate.in")
+                    .withBody("{\"role\":\"INVESTIGATOR\"}")));
+
+    HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+    Mockito.when(request.getMethod()).thenReturn("GET");
+    Mockito.when(request.getRequestURI()).thenReturn("/v1/auth/me");
+    Mockito.when(request.getQueryString()).thenReturn(null);
+    Mockito.when(request.getInputStream())
+        .thenReturn(new DelegatingServletInputStream(new byte[0]));
+    Vector<String> headerNames = new Vector<>();
+    headerNames.add("Origin");
+    headerNames.add("Authorization");
+    Mockito.when(request.getHeaderNames()).thenReturn(headerNames.elements());
+    Mockito.when(request.getHeaders("Origin"))
+        .thenReturn(
+            Collections.enumeration(
+                Collections.singletonList("https://aparadhkavach-wb.onslate.in")));
+    Mockito.when(request.getHeaders("Authorization"))
+        .thenReturn(Collections.enumeration(Collections.singletonList("Bearer test-token")));
+
+    ResponseEntity<byte[]> response = proxy.forward(wireMock.baseUrl(), request);
+
+    assertEquals(200, response.getStatusCode().value());
+    assertEquals(null, response.getHeaders().getFirst("Access-Control-Allow-Origin"));
+    assertEquals(null, response.getHeaders().getFirst("Access-Control-Allow-Credentials"));
+    assertEquals(null, response.getHeaders().getFirst("X-Frame-Options"));
+    assertEquals("application/json", response.getHeaders().getFirst("Content-Type"));
+
+    wireMock.verify(
+        getRequestedFor(urlEqualTo("/v1/auth/me"))
+            .withHeader("Authorization", equalTo("Bearer test-token"))
+            .withoutHeader("Origin"));
+  }
+
   /** Minimal ServletInputStream for mocked requests. */
   private static final class DelegatingServletInputStream
       extends jakarta.servlet.ServletInputStream {

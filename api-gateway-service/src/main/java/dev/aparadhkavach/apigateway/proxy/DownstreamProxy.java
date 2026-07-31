@@ -14,6 +14,11 @@ import org.springframework.web.client.RestClient;
 /**
  * Minimal request forwarder for Feature 1 path prefixes. Not a general-purpose reverse proxy —
  * copies method, path, query, body, and non-hop-by-hop headers to a configured downstream base URL.
+ *
+ * <p>When the downstream base is another public AppSail URL, that platform also emits CORS /
+ * frame headers for the browser {@code Origin}. Echoing them here stacks duplicate {@code
+ * Access-Control-Allow-Origin} values with the Gateway's own CORS — browsers reject the response
+ * even on HTTP 200 ({@code Failed to fetch}).
  */
 @Component
 public class DownstreamProxy {
@@ -37,6 +42,24 @@ public class DownstreamProxy {
           "content-length",
           "content-encoding",
           "accept-encoding");
+
+  /**
+   * Browser-facing CORS / framing belongs only on the Gateway response. Downstream AppSail edges
+   * add these when {@code Origin} is present; never copy them back to the client.
+   */
+  private static final Set<String> STRIP_FROM_DOWNSTREAM_RESPONSE =
+      Set.of(
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "access-control-allow-methods",
+          "access-control-allow-headers",
+          "access-control-expose-headers",
+          "access-control-max-age",
+          "access-control-allow-private-network",
+          "x-frame-options");
+
+  /** Do not send the browser Origin to downstream — avoids AppSail injecting CORS there. */
+  private static final Set<String> STRIP_FROM_DOWNSTREAM_REQUEST = Set.of("origin");
 
   private final RestClient restClient;
 
@@ -77,7 +100,7 @@ public class DownstreamProxy {
               res.getHeaders()
                   .forEach(
                       (name, values) -> {
-                        if (!isHopByHop(name)) {
+                        if (!isHopByHop(name) && !isStrippedDownstreamResponse(name)) {
                           responseHeaders.put(name, values);
                         }
                       });
@@ -93,7 +116,7 @@ public class DownstreamProxy {
     Collections.list(request.getHeaderNames())
         .forEach(
             name -> {
-              if (!isHopByHop(name)) {
+              if (!isHopByHop(name) && !isStrippedDownstreamRequest(name)) {
                 Collections.list(request.getHeaders(name))
                     .forEach(value -> headers.add(name, value));
               }
@@ -102,5 +125,13 @@ public class DownstreamProxy {
 
   private static boolean isHopByHop(String headerName) {
     return HOP_BY_HOP_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
+  }
+
+  private static boolean isStrippedDownstreamResponse(String headerName) {
+    return STRIP_FROM_DOWNSTREAM_RESPONSE.contains(headerName.toLowerCase(Locale.ROOT));
+  }
+
+  private static boolean isStrippedDownstreamRequest(String headerName) {
+    return STRIP_FROM_DOWNSTREAM_REQUEST.contains(headerName.toLowerCase(Locale.ROOT));
   }
 }
