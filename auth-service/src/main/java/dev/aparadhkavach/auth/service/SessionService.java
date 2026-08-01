@@ -1,5 +1,7 @@
 package dev.aparadhkavach.auth.service;
 
+import dev.aparadhkavach.auth.catalyst.CatalystProjectUser;
+import dev.aparadhkavach.auth.catalyst.CatalystUserDirectory;
 import dev.aparadhkavach.auth.config.AuthProperties;
 import dev.aparadhkavach.auth.config.JwtProperties;
 import dev.aparadhkavach.auth.dto.CreateSessionRequest;
@@ -13,22 +15,32 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.security.interfaces.RSAPublicKey;
 import java.util.List;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 public class SessionService {
 
+  private static final Logger log = LoggerFactory.getLogger(SessionService.class);
+
   private final AuthProperties authProperties;
   private final JwtProperties jwtProperties;
   private final JwtIssuer jwtIssuer;
+  private final CatalystUserDirectory catalystUserDirectory;
   private volatile RSAPublicKey publicKey;
 
   public SessionService(
-      AuthProperties authProperties, JwtProperties jwtProperties, JwtIssuer jwtIssuer) {
+      AuthProperties authProperties,
+      JwtProperties jwtProperties,
+      JwtIssuer jwtIssuer,
+      CatalystUserDirectory catalystUserDirectory) {
     this.authProperties = authProperties;
     this.jwtProperties = jwtProperties;
     this.jwtIssuer = jwtIssuer;
+    this.catalystUserDirectory = catalystUserDirectory;
   }
 
   public SessionResponse create(CreateSessionRequest request) {
@@ -36,36 +48,35 @@ public class SessionService {
       throw new ValidationException("Request body is required");
     }
 
+    String catalystUserId = resolveCatalystUserId(request);
+    if (StringUtils.hasText(catalystUserId)) {
+      return mintFromCatalystUser(catalystUserId.trim(), request.email());
+    }
+
     if (StringUtils.hasText(request.catalystAccessToken())) {
       throw new ValidationException(
-          "Catalyst Embedded exchange is not wired yet. Enable AUTH_ALLOW_DEV_MINT for bootstrap mint, or wait for Embedded integration.");
+          "catalystAccessToken exchange is not supported; send catalystUserId from Embedded Auth");
     }
 
     if (!authProperties.isAllowDevMint()) {
       throw new UnauthorizedException(
-          "Session mint requires catalystAccessToken (or AUTH_ALLOW_DEV_MINT=true for bootstrap)");
+          "Session mint requires catalystUserId (or AUTH_ALLOW_DEV_MINT=true for bootstrap)");
     }
 
     if (!StringUtils.hasText(request.role())) {
       throw new ValidationException("role is required when using AUTH_ALLOW_DEV_MINT");
     }
 
-    AppRole role;
-    try {
-      role = AppRole.fromString(request.role());
-    } catch (IllegalArgumentException e) {
-      throw new ValidationException("Unknown role: " + request.role());
-    }
-
+    AppRole role = parseAppRole(request.role());
     String sub =
         StringUtils.hasText(request.sub())
             ? request.sub().trim()
-            : "dev-" + role.name().toLowerCase();
+            : "dev-" + role.name().toLowerCase(Locale.ROOT);
     String displayName =
         StringUtils.hasText(request.displayName())
             ? request.displayName().trim()
             : Character.toUpperCase(role.name().charAt(0))
-                + role.name().substring(1).toLowerCase();
+                + role.name().substring(1).toLowerCase(Locale.ROOT);
 
     return toResponse(jwtIssuer.mint(sub, role, displayName));
   }
@@ -84,6 +95,81 @@ public class SessionService {
 
   public void revoke(String bearerToken) {
     parseClaims(bearerToken);
+  }
+
+  private SessionResponse mintFromCatalystUser(String catalystUserId, String claimedEmail) {
+    long userId;
+    try {
+      userId = Long.parseLong(catalystUserId);
+    } catch (NumberFormatException ex) {
+      throw new ValidationException("catalystUserId must be numeric");
+    }
+
+    CatalystProjectUser user;
+    try {
+      user = catalystUserDirectory.findByUserId(userId);
+    } catch (Exception ex) {
+      log.warn("Catalyst user lookup failed for userId={}: {}", userId, ex.toString());
+      throw new UnauthorizedException("Could not verify Catalyst user with Auth Service");
+    }
+    if (user == null) {
+      throw new UnauthorizedException("Catalyst user not found");
+    }
+
+    if (StringUtils.hasText(user.status())
+        && !"ACTIVE".equalsIgnoreCase(user.status().trim())) {
+      throw new UnauthorizedException("Catalyst user is not ACTIVE");
+    }
+    if (Boolean.FALSE.equals(user.confirmed())) {
+      throw new UnauthorizedException("Catalyst user has not confirmed password yet");
+    }
+
+    if (StringUtils.hasText(claimedEmail)
+        && StringUtils.hasText(user.email())
+        && !claimedEmail.trim().equalsIgnoreCase(user.email().trim())) {
+      throw new UnauthorizedException("Catalyst user email mismatch");
+    }
+
+    AppRole role;
+    try {
+      role = parseAppRole(normalizeRoleName(user.roleName()));
+    } catch (ValidationException ex) {
+      throw new ValidationException(
+          "Catalyst role \""
+              + String.valueOf(user.roleName())
+              + "\" cannot sign in. Set role to INVESTIGATOR / ANALYST / SUPERVISOR / POLICYMAKER.");
+    }
+
+    String displayName =
+        StringUtils.hasText(user.displayName()) ? user.displayName() : role.name();
+    return toResponse(jwtIssuer.mint(user.userId(), role, displayName));
+  }
+
+  /** Prefer explicit catalystUserId; accept numeric legacy catalystAccessToken as user id. */
+  private static String resolveCatalystUserId(CreateSessionRequest request) {
+    if (StringUtils.hasText(request.catalystUserId())) {
+      return request.catalystUserId();
+    }
+    String token = request.catalystAccessToken();
+    if (StringUtils.hasText(token) && token.trim().chars().allMatch(Character::isDigit)) {
+      return token.trim();
+    }
+    return null;
+  }
+
+  private static String normalizeRoleName(String raw) {
+    if (!StringUtils.hasText(raw)) {
+      return "";
+    }
+    return raw.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+  }
+
+  private static AppRole parseAppRole(String raw) {
+    try {
+      return AppRole.fromString(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ValidationException("Unknown role: " + raw);
+    }
   }
 
   private Claims parseClaims(String bearerToken) {

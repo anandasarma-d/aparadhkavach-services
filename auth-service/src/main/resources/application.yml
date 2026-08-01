@@ -8,7 +8,8 @@ spring:
 aparadhkavach:
   environment: ${APP_ENV:local}
   auth:
-    # Bootstrap only (mvp2/10). Set true on Lane B until Catalyst Embedded exchange is wired.
+    # Bootstrap / demo role picker only. Embedded path uses catalystUserId exchange (D-080).
+    # Set false on Lane B after exchange smoke passes.
     allow-dev-mint: ${AUTH_ALLOW_DEV_MINT:true}
   jwt:
     # RSA PKCS#8 PEM. Use \n for single-line AppSail env values.

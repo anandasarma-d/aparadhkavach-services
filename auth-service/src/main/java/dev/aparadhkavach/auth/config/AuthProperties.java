@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 public class AuthProperties {
 
   /**
-   * When true, POST /v1/auth/sessions accepts {role,sub,displayName} without Catalyst token.
-   * Bootstrap only — disable once Embedded exchange is live (mvp2/10).
+   * When true, POST /v1/auth/sessions accepts {role,sub,displayName} without catalystUserId.
+   * Demo / local bootstrap only — disable once Embedded exchange is verified (D-080).
    */
   private boolean allowDevMint = false;
 
