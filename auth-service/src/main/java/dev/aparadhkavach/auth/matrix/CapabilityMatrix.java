@@ -15,11 +15,12 @@ public class CapabilityMatrix {
   private final Map<AppRole, AppView> homeByRole = new EnumMap<>(AppRole.class);
 
   public CapabilityMatrix() {
-    viewsByRole.put(AppRole.INVESTIGATOR, List.of(AppView.risk, AppView.network, AppView.similar));
+    viewsByRole.put(
+        AppRole.INVESTIGATOR, List.of(AppView.risk, AppView.network, AppView.similar, AppView.qa));
     viewsByRole.put(AppRole.ANALYST, List.of(AppView.hotspots, AppView.risk));
     viewsByRole.put(
         AppRole.SUPERVISOR,
-        List.of(AppView.risk, AppView.hotspots, AppView.network, AppView.similar));
+        List.of(AppView.risk, AppView.hotspots, AppView.network, AppView.similar, AppView.qa));
     viewsByRole.put(AppRole.POLICYMAKER, List.of(AppView.hotspots));
 
     homeByRole.put(AppRole.INVESTIGATOR, AppView.risk);

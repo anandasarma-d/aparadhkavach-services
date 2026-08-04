@@ -13,6 +13,8 @@
     "PGVECTOR_PASSWORD": "local-dev-placeholder-not-a-real-secret",
     "ANTHROPIC_API_KEY": "local-dev-placeholder-not-a-real-secret",
     "CLAUDE_MODEL": "claude-sonnet-4-6",
+    "INVESTIGATION_SERVICE_URL": "http://localhost:8081",
+    "QUERY_JURISDICTION": "Karnataka",
     "EMBEDDING_DIMENSIONS": "1024",
     "SARVAM_STT_URL": "http://localhost:8000",
     "VECTOR_TOP_K": "5",

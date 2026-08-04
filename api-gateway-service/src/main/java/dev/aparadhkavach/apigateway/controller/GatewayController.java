@@ -51,4 +51,11 @@ public class GatewayController {
       throws IOException {
     return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }
+
+  /** F3 / mvp2/11 — custom method on queries (colon form; not under /v1/queries/). */
+  @RequestMapping("/v1/queries:ask")
+  public ResponseEntity<byte[]> routeAskToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
+  }
 }

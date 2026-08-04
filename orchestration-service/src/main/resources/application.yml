@@ -44,6 +44,9 @@ spring:
       initialization-fail-timeout: -1
 
   ai:
+    # One attempt only — hung Anthropic + retry would stack past AppSail ~30s (408).
+    retry:
+      max-attempts: 1
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:local-dev-placeholder-not-a-real-key}
       chat:
@@ -57,6 +60,30 @@ spring:
 
 aparadhkavach:
   environment: ${APP_ENV:local}
+  # Investigation HTTP for Q&A accused context (mvp2/11). Prefer over Orch DataStore theft.
+  investigation:
+    base-url: ${INVESTIGATION_SERVICE_URL:http://localhost:8081}
+  # Claude Q&A prompt (mvp2/11). Change jurisdiction (or the whole system-prompt) per state deploy —
+  # no Java edit required. Placeholder {jurisdiction} is substituted at runtime.
+  query:
+    jurisdiction: ${QUERY_JURISDICTION:Karnataka}
+    system-prompt: |
+      You are AparadhKavach investigator assist for {jurisdiction} Police.
+      Answer ONLY from the CONTEXT block. Do not invent FIR numbers, accused ids, names, scores, or relationships.
+      If context is insufficient, say so clearly and keep confidenceScore low.
+      Cite entity and FIR ids that appear in CONTEXT.
+      Write the answer field as 2–4 short paragraphs separated by blank lines (one idea per paragraph).
+      Use plain officer language. Never say "CONTEXT", "CONTEXT graph", "Neo4j", or "1-hop".
+      Prefer "linked case records" or "available case records" when referring to the assembled facts.
+      For places, write human labels (e.g. "Mandya market area") — never SCREAMING_SNAKE codes like MARKET_AREA.
+      Respond with ONLY valid JSON (no markdown fences, no prose before/after) using exactly these keys:
+        answer (string — multi-paragraph with \\n\\n between paragraphs),
+        evidenceSources (array of strings — ids from CONTEXT; may be empty if none apply),
+        relatedFirs (array of strings),
+        relatedEntities (array of objects with id, type, label — label must be human-readable),
+        confidenceScore (number 0..1),
+        reasoningSummary (string — short; plain language; no stack jargon).
+      Do not use snake_case key names.
   sarvam:
     stt-url: ${SARVAM_STT_URL:http://localhost:8000}
   vector:

@@ -25,7 +25,7 @@ public class RolePathAllowlist {
   public RolePathAllowlist() {
     prefixes.put(
         Role.INVESTIGATOR,
-        List.of("/v1/accusedPersons", "/v1/entities", "/v1/firs", "/v1/auth"));
+        List.of("/v1/accusedPersons", "/v1/entities", "/v1/firs", "/v1/queries", "/v1/auth"));
     prefixes.put(Role.ANALYST, List.of("/v1/analytics", "/v1/accusedPersons", "/v1/auth"));
     prefixes.put(
         Role.SUPERVISOR,
@@ -34,6 +34,7 @@ public class RolePathAllowlist {
             "/v1/analytics",
             "/v1/entities",
             "/v1/firs",
+            "/v1/queries",
             "/v1/auth"));
     prefixes.put(Role.POLICYMAKER, List.of("/v1/analytics", "/v1/auth"));
   }
