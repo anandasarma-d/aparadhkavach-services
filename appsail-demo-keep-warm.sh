@@ -11,11 +11,13 @@
 #   INTERVAL_SECONDS=120 ./appsail-demo-keep-warm.sh
 #
 # After mvp2/10 JWT at Gateway, feature paths on GW need a Bearer token (D-063/D-064).
-# This script mints via AUTH_ALLOW_DEV_MINT (or WARM_BEARER / WARM_MINT_JSON). Prefer Orch
-# direct warm first so Neo4j/PgVector are hot before Gateway retries.
+# Mint via AUTH_ALLOW_DEV_MINT (usually false on Lane B) OR export WARM_BEARER from a
+# Hosted-minted JWT (see mvp2/env.cheat-sheet.local). Prefer Orch direct warm first so
+# Neo4j/PgVector/Claude ask are hot before Gateway retries.
 #
-# Feature paths (not /health alone) — D-071 / D-064: Similar cold → 408
-# EXECUTION_TIME_EXCEEDED unless Orch/Gateway similarCases is warmed first.
+# Feature paths (not /health alone):
+#   - D-071 / D-064: Similar cold → 408 unless Orch similarCases is warmed first
+#   - D-100: Q&A cold → Gateway Read timed out (~25s) unless Orch queries:ask is warmed
 #
 # Start recording as soon as "WARM WINDOW STARTED" appears.
 
@@ -28,12 +30,14 @@ IN="${IN:-https://investigation-service-50044400287.development.catalystappsail.
 ORCH="${ORCH:-https://orchestration-service-50044400287.development.catalystappsail.in}"
 AUTH="${AUTH:-https://auth-service-50044400287.development.catalystappsail.in}"
 
-# Demo IDs locked for Lane B rehearsal (Slate screenshots 28 Jul)
+# Demo IDs locked for Lane B rehearsal (Slate screenshots 28 Jul / 5 Aug)
 NET_ACCUSED="${NET_ACCUSED:-ACC-00044}"
 RISK_A="${RISK_A:-ACC-00040}"
 RISK_B="${RISK_B:-ACC-00124}"
 SIM_A="${SIM_A:-FIR-003276}"
 SIM_B="${SIM_B:-FIR-002683}"
+ASK_ACCUSED="${ASK_ACCUSED:-ACC-00040}"
+ASK_FIR="${ASK_FIR:-FIR-003276}"
 
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-120}"
 CONNECT_TIMEOUT_SECONDS="${CONNECT_TIMEOUT_SECONDS:-15}"
@@ -176,11 +180,24 @@ while :; do
   request "Investigation risk ${RISK_A}" \
     "$IN/v1/accusedPersons/${RISK_A}:riskProfile" || failures=$((failures + 1))
 
+  # Q&A / Claude (D-100) — Gateway read budget ~25s; cold Orch+Claude often exceeds it
+  echo "Q&A warm (Orch direct — Claude path; D-100):"
+  request "Orch Ask ${ASK_ACCUSED}" \
+    "$ORCH/v1/queries:ask" \
+    -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
+    --data "{\"accusedId\":\"${ASK_ACCUSED}\",\"firId\":null}" || failures=$((failures + 1))
+  request "Orch Ask ${ASK_FIR}" \
+    "$ORCH/v1/queries:ask" \
+    -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
+    --data "{\"accusedId\":null,\"firId\":\"${ASK_FIR}\"}" || failures=$((failures + 1))
+
   echo "Mint warm JWT for Gateway feature paths (D-063/D-064 — bare GW is 401 after mvp2/10):"
   TOKEN="$(mint_warm_bearer || true)"
   if [[ -z "${TOKEN:-}" ]]; then
-    echo "  WARN: could not mint Bearer (set WARM_BEARER or enable AUTH_ALLOW_DEV_MINT). Skipping GW feature warm."
-    failures=$((failures + 1))
+    echo "  WARN: could not mint Bearer (AUTH_ALLOW_DEV_MINT is off on Lane B)."
+    echo "        Export WARM_BEARER=<JWT from browser sessionStorage / mint response> then re-run."
+    echo "        Orch-direct warm above still covers Network/Similar/Q&A; GW Risk/Hotspots warm skipped."
+    # Soft: do not fail the sweep — Slate already holds a user JWT for interactive demos.
   else
     AUTH_H=(-H "Authorization: Bearer ${TOKEN}" -H "Accept: application/json")
     echo "Demo features through Gateway (retry on 408 — D-063/D-064):"

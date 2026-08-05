@@ -64,12 +64,13 @@ public class DownstreamProxy {
   private static final Set<String> STRIP_FROM_DOWNSTREAM_REQUEST = Set.of("origin");
 
   /**
-   * Hard caps under Catalyst AppSail's ~30s budget (D-063/D-064). Unbounded RestClient previously
-   * let cold Orch hang until the platform 408'd the Gateway request itself.
+   * Hard caps under Catalyst AppSail's ~30s budget (D-063/D-064/D-100). Unbounded RestClient
+   * previously let cold Orch hang until the platform 408'd the Gateway request itself. Ask needs
+   * Neo4j + Claude (~10–14s warm); leave a little headroom under the platform kill.
    */
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
-  private static final Duration READ_TIMEOUT = Duration.ofSeconds(25);
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(28);
 
   private final RestClient restClient;
 
