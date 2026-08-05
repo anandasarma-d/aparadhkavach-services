@@ -44,8 +44,26 @@ public class FirEmbeddingsRepository {
   /**
    * Cosine nearest neighbors for {@code firId}, excluding self. Throws {@link
    * ResourceNotFoundException} when the probe FIR is absent from {@code fir_embeddings}.
+   *
+   * <p>Single round-trip (D-064): probe absence is detected via a second cheap EXISTS only when the
+   * ANN result is empty — avoids two cold JDBC calls on every happy path.
    */
   public List<SimilarCase> findSimilar(String firId, int limit) {
+    List<SimilarCase> cases =
+        jdbc.query(
+            SIMILAR_SQL,
+            Map.of("firId", firId, "limit", limit),
+            (rs, rowNum) ->
+                new SimilarCase(
+                    rs.getString("fir_id"),
+                    rs.getDouble("similarity_score"),
+                    rs.getString("district"),
+                    rs.getString("crime_type"),
+                    toLocalDate(rs.getDate("date_filed")),
+                    rs.getString("status")));
+    if (!cases.isEmpty()) {
+      return cases;
+    }
     Boolean exists =
         jdbc.getJdbcTemplate()
             .queryForObject(
@@ -55,18 +73,7 @@ public class FirEmbeddingsRepository {
     if (!Boolean.TRUE.equals(exists)) {
       throw new ResourceNotFoundException("No embedding for firId=" + firId);
     }
-
-    return jdbc.query(
-        SIMILAR_SQL,
-        Map.of("firId", firId, "limit", limit),
-        (rs, rowNum) ->
-            new SimilarCase(
-                rs.getString("fir_id"),
-                rs.getDouble("similarity_score"),
-                rs.getString("district"),
-                rs.getString("crime_type"),
-                toLocalDate(rs.getDate("date_filed")),
-                rs.getString("status")));
+    return List.of();
   }
 
   private static LocalDate toLocalDate(Date date) {

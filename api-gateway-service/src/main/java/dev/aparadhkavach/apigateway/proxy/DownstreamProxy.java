@@ -2,12 +2,14 @@ package dev.aparadhkavach.apigateway.proxy;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -61,15 +63,30 @@ public class DownstreamProxy {
   /** Do not send the browser Origin to downstream — avoids AppSail injecting CORS there. */
   private static final Set<String> STRIP_FROM_DOWNSTREAM_REQUEST = Set.of("origin");
 
+  /**
+   * Hard caps under Catalyst AppSail's ~30s budget (D-063/D-064). Unbounded RestClient previously
+   * let cold Orch hang until the platform 408'd the Gateway request itself.
+   */
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(25);
+
   private final RestClient restClient;
 
   public DownstreamProxy() {
-    this.restClient = RestClient.create();
+    this.restClient = timedRestClient();
   }
 
   /** Package-visible for tests that need to inject a RestClient (e.g. WireMock). */
   DownstreamProxy(RestClient restClient) {
     this.restClient = restClient;
+  }
+
+  static RestClient timedRestClient() {
+    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(CONNECT_TIMEOUT);
+    factory.setReadTimeout(READ_TIMEOUT);
+    return RestClient.builder().requestFactory(factory).build();
   }
 
   public ResponseEntity<byte[]> forward(String downstreamBaseUrl, HttpServletRequest request)

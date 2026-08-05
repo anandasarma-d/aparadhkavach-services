@@ -98,6 +98,7 @@ public class SessionService {
   }
 
   private SessionResponse mintFromCatalystUser(String catalystUserId, String claimedEmail) {
+    long t0 = System.nanoTime();
     long userId;
     try {
       userId = Long.parseLong(catalystUserId);
@@ -108,8 +109,16 @@ public class SessionService {
     CatalystProjectUser user;
     try {
       user = catalystUserDirectory.findByUserId(userId);
+      log.info(
+          "Catalyst user lookup ok userId={} tookMs={}",
+          userId,
+          (System.nanoTime() - t0) / 1_000_000L);
     } catch (Exception ex) {
-      log.warn("Catalyst user lookup failed for userId={}: {}", userId, ex.toString());
+      log.warn(
+          "Catalyst user lookup failed for userId={} tookMs={}: {}",
+          userId,
+          (System.nanoTime() - t0) / 1_000_000L,
+          ex.toString());
       throw new UnauthorizedException("Could not verify Catalyst user with Auth Service");
     }
     if (user == null) {

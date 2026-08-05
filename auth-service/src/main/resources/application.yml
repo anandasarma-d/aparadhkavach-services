@@ -10,7 +10,8 @@ aparadhkavach:
   auth:
     # Bootstrap / demo role picker only. Embedded path uses catalystUserId exchange (D-080).
     # Set false on Lane B after exchange smoke passes.
-    allow-dev-mint: ${AUTH_ALLOW_DEV_MINT:true}
+    # D-080: default off. Keep-warm may set WARM_BEARER when mint is disabled.
+    allow-dev-mint: ${AUTH_ALLOW_DEV_MINT:false}
   jwt:
     # RSA PKCS#8 PEM. Use \n for single-line AppSail env values.
     private-key: ${JWT_PRIVATE_KEY:local-dev-placeholder-not-a-real-key}

@@ -42,6 +42,11 @@ spring:
       # No live PgVector instance in local scaffold verification — don't fail startup
       # trying to open a connection pool against it.
       initialization-fail-timeout: -1
+      # D-064: keep one idle JDBC connection so cold similarCases does not pay pool+TLS setup
+      # inside the AppSail request budget.
+      minimum-idle: ${PGVECTOR_HIKARI_MIN_IDLE:1}
+      maximum-pool-size: ${PGVECTOR_HIKARI_MAX_POOL:5}
+      connection-timeout: ${PGVECTOR_HIKARI_CONNECTION_TIMEOUT_MS:10000}
 
   ai:
     # One attempt only — hung Anthropic + retry would stack past AppSail ~30s (408).
@@ -89,6 +94,8 @@ aparadhkavach:
   vector:
     top-k: ${VECTOR_TOP_K:5}
     max-top-k: ${VECTOR_MAX_TOP_K:10}
+    # Async boot warm (SimilarStartupProbe) — same demo FIR as keep-warm / D-064.
+    warmup-fir-id: ${VECTOR_WARMUP_FIR_ID:FIR-003276}
   graph:
     # D-060: AppSail blackholes outbound Bolt 7687 (requests hang → Catalyst 408), so the
     # network endpoint talks to Aura via the HTTPS Query API (443) by default. Set
@@ -98,6 +105,8 @@ aparadhkavach:
     network-default-depth: ${GRAPH_NETWORK_DEFAULT_DEPTH:1}
     network-max-depth: ${GRAPH_NETWORK_MAX_DEPTH:2}
     network-max-nodes: ${GRAPH_NETWORK_MAX_NODES:50}
+    # Async boot warm (NetworkStartupProbe) — same rehearsal accused as keep-warm / D-063.
+    warmup-entity-id: ${GRAPH_WARMUP_ENTITY_ID:ACC-00044}
   resilience:
     circuit-breaker-threshold: ${CIRCUIT_BREAKER_THRESHOLD:3}
   # Voyage AI (ADR-025) — no native Spring AI provider exists yet, so these aren't under
