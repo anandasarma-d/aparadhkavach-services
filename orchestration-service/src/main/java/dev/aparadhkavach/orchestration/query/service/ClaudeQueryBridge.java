@@ -92,6 +92,13 @@ public class ClaudeQueryBridge {
   }
 
   public ClaudeAnswer complete(String contextBlock, String seedEntityId) {
+    return complete(contextBlock, seedEntityId, null);
+  }
+
+  /**
+   * @param priorTurnsBlock optional PRIOR_TURNS text from {@link ConversationHistoryPacker} (Step D)
+   */
+  public ClaudeAnswer complete(String contextBlock, String seedEntityId, String priorTurnsBlock) {
     if (!isConfigured() || chatClient == null) {
       return unavailable(
           "Claude is not configured on this environment (missing ANTHROPIC_API_KEY). "
@@ -102,23 +109,29 @@ public class ClaudeQueryBridge {
     }
 
     String context = truncateContext(contextBlock);
+    String history =
+        priorTurnsBlock == null || priorTurnsBlock.isBlank() ? "" : priorTurnsBlock.trim() + "\n\n";
     String user =
         "Seed entity: "
             + seedEntityId
-            + "\n\nCONTEXT:\n"
+            + "\n\n"
+            + history
+            + "CONTEXT:\n"
             + context
             + "\n\nTask: In under 120 words across 2–4 short paragraphs (separate with blank lines),"
             + " summarize what the record and immediate linked case records show about this seed"
-            + " for an investigating officer. Use plain language; never say CONTEXT, Neo4j, or 1-hop."
+            + " for an investigating officer. Use plain language; never say CONTEXT, PRIOR_TURNS,"
+            + " Neo4j, or 1-hop. Answer only from CONTEXT (PRIOR_TURNS is continuity only)."
             + " Humanize place codes (MARKET_AREA → market area). Reply with ONLY the JSON object"
             + " required by the system prompt — no markdown, no preamble.";
 
     long started = System.currentTimeMillis();
     log.info(
-        "Claude ask start seed={} timeoutSec={} contextChars={}",
+        "Claude ask start seed={} timeoutSec={} contextChars={} historyChars={}",
         seedEntityId,
         CLAUDE_TIMEOUT_SECONDS,
-        context.length());
+        context.length(),
+        history.isEmpty() ? 0 : priorTurnsBlock.trim().length());
     Future<String> future =
         claudeExecutor.submit(
             () ->

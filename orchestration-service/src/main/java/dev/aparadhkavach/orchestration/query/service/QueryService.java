@@ -61,6 +61,14 @@ public class QueryService {
    *     one-off envelope (legacy sentinel avoided — callers should prefer ConversationService)
    */
   public QueryResource ask(QueryRequest request, String conversationId) {
+    return ask(request, conversationId, null);
+  }
+
+  /**
+   * @param priorTurnsBlock packed PRIOR_TURNS from {@link ConversationHistoryPacker} (mvp2/12 Step
+   *     D), or null/blank for single-shot
+   */
+  public QueryResource ask(QueryRequest request, String conversationId, String priorTurnsBlock) {
     long started = System.currentTimeMillis();
     QuerySeed seed = resolveSeed(request);
 
@@ -97,11 +105,13 @@ public class QueryService {
         QueryContextAssembler.assemble(seed.kind().name(), seed.entityId(), risk, network);
 
     t0 = System.currentTimeMillis();
-    ClaudeAnswer model = claudeQueryBridge.complete(context, seed.entityId());
+    ClaudeAnswer model =
+        claudeQueryBridge.complete(context, seed.entityId(), priorTurnsBlock);
     log.info(
-        "ask phase=claude seed={} confidence={} tookMs={}",
+        "ask phase=claude seed={} confidence={} historyChars={} tookMs={}",
         seed.entityId(),
         model.confidenceScore(),
+        priorTurnsBlock == null || priorTurnsBlock.isBlank() ? 0 : priorTurnsBlock.length(),
         System.currentTimeMillis() - t0);
 
     List<String> relatedFirs =

@@ -9,6 +9,7 @@ import dev.aparadhkavach.orchestration.dto.FollowUpContext;
 import dev.aparadhkavach.orchestration.dto.QueryRequest;
 import dev.aparadhkavach.orchestration.dto.QueryResource;
 import dev.aparadhkavach.orchestration.dto.RelatedEntityResource;
+import dev.aparadhkavach.orchestration.query.config.QueryProperties;
 import dev.aparadhkavach.orchestration.query.conversation.Conversation;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessage;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessageRole;
@@ -25,8 +26,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B). Follow-ups resolve to ACC-/FIR- seeds from
- * prior citations, then reuse {@link QueryService} retrieval (Step C path).
+ * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B/D). Follow-ups resolve to ACC-/FIR- seeds
+ * from prior citations, re-retrieve via {@link QueryService}, and pack a bounded history window into
+ * Claude (Step D).
  */
 @Service
 public class ConversationService {
@@ -36,14 +38,17 @@ public class ConversationService {
   private final InMemoryConversationStore store;
   private final QueryService queryService;
   private final FollowUpResolver followUpResolver;
+  private final QueryProperties queryProperties;
 
   public ConversationService(
       InMemoryConversationStore store,
       QueryService queryService,
-      FollowUpResolver followUpResolver) {
+      FollowUpResolver followUpResolver,
+      QueryProperties queryProperties) {
     this.store = store;
     this.queryService = queryService;
     this.followUpResolver = followUpResolver;
+    this.queryProperties = queryProperties;
   }
 
   public ConversationCreatedResource create() {
@@ -88,7 +93,22 @@ public class ConversationService {
                   null, resolved.entityId(), conversation.conversationId(), request.followUp());
     }
 
-    QueryResource answer = queryService.ask(effective, conversation.conversationId());
+    String priorTurns =
+        ConversationHistoryPacker.pack(
+            conversation.messages(),
+            queryProperties.getHistoryMaxTurns(),
+            queryProperties.getHistoryMaxChars(),
+            queryProperties.getHistoryMaxTurnChars());
+    if (!priorTurns.isBlank()) {
+      log.info(
+          "prompt packing conversationId={} historyChars={} maxTurns={}",
+          conversation.conversationId(),
+          priorTurns.length(),
+          queryProperties.getHistoryMaxTurns());
+    }
+
+    QueryResource answer =
+        queryService.ask(effective, conversation.conversationId(), priorTurns);
 
     String userText = userTurnText(effective, hasFollowUp ? request.followUp() : null);
     List<RelatedEntityRef> relatedRefs = toRefs(answer.relatedEntities());

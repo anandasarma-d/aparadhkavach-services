@@ -15,6 +15,7 @@ import dev.aparadhkavach.orchestration.graph.repository.EntityNetworkRepository;
 import dev.aparadhkavach.orchestration.graph.service.EntityNetworkService;
 import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileClient;
 import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileSnapshot;
+import dev.aparadhkavach.orchestration.query.config.QueryProperties;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessageRole;
 import dev.aparadhkavach.orchestration.query.conversation.InMemoryConversationStore;
 import java.util.List;
@@ -144,6 +145,9 @@ class ConversationServiceTest {
         ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
     QueryService queryService = new QueryService(networkService, investigation, bridge);
     return new ConversationService(
-        new InMemoryConversationStore(), queryService, new FollowUpResolver());
+        new InMemoryConversationStore(),
+        queryService,
+        new FollowUpResolver(),
+        new QueryProperties());
   }
 }

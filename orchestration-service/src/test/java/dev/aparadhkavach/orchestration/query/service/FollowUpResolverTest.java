@@ -55,6 +55,95 @@ class FollowUpResolverTest {
         .isInstanceOf(ValidationException.class);
   }
 
+  @Test
+  void resolvesVehiclePhraseToHostAccused() {
+    Conversation conversation = conversationWithVehicle();
+    // After an FIR follow-up, lastSeed is FIR — vehicle ask must still map to ACC that cited VEH.
+    conversation.append(
+        new ConversationMessage(
+            "m3",
+            ConversationMessageRole.USER,
+            Instant.now(),
+            "Tell me about FIR-002351",
+            null,
+            "FIR-002351",
+            null,
+            List.of(),
+            List.of(),
+            List.of()));
+    conversation.append(
+        new ConversationMessage(
+            "m4",
+            ConversationMessageRole.ASSISTANT,
+            Instant.now(),
+            "FIR briefing without vehicle…",
+            null,
+            "FIR-002351",
+            "q2",
+            List.of("FIR-002351"),
+            List.of(),
+            List.of()));
+
+    var seed = resolver.resolve(conversation, "what about the vehicle used?");
+    assertThat(seed.kind()).isEqualTo(QuerySeedKind.ACCUSED);
+    assertThat(seed.entityId()).isEqualTo("ACC-00031");
+  }
+
+  @Test
+  void resolvesVehiclePlateTypoToHostAccused() {
+    Conversation conversation = conversationWithVehicle();
+    var seed = resolver.resolve(conversation, "tell me about the vehicle KA-16-QO7110");
+    assertThat(seed.kind()).isEqualTo(QuerySeedKind.ACCUSED);
+    assertThat(seed.entityId()).isEqualTo("ACC-00031");
+  }
+
+  @Test
+  void resolvesExplicitVehIdToHostAccused() {
+    Conversation conversation = conversationWithVehicle();
+    var seed = resolver.resolve(conversation, "Tell me about VEH-00768");
+    assertThat(seed.kind()).isEqualTo(QuerySeedKind.ACCUSED);
+    assertThat(seed.entityId()).isEqualTo("ACC-00031");
+  }
+
+  @Test
+  void vehicleWithNoCitedVehicle_rejected() {
+    Conversation conversation = seededConversation();
+    assertThatThrownBy(() -> resolver.resolve(conversation, "what about the vehicle used?"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("no cited vehicle");
+  }
+
+  private static Conversation conversationWithVehicle() {
+    Conversation conversation = new Conversation("c-veh", Instant.now());
+    conversation.append(
+        new ConversationMessage(
+            "m1",
+            ConversationMessageRole.USER,
+            Instant.now(),
+            "Ask about accused ACC-00031",
+            "ACC-00031",
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of()));
+    conversation.append(
+        new ConversationMessage(
+            "m2",
+            ConversationMessageRole.ASSISTANT,
+            Instant.now(),
+            "Owns KA-16-QQ7110…",
+            "ACC-00031",
+            null,
+            "q1",
+            List.of("ACC-00031", "VEH-00768"),
+            List.of("FIR-002351"),
+            List.of(
+                new RelatedEntityRef("VEH-00768", "Vehicle", "KA-16-QQ7110"),
+                new RelatedEntityRef("ACC-04013", "Accused", "Shivani Rai"))));
+    return conversation;
+  }
+
   private static Conversation seededConversation() {
     Conversation conversation = new Conversation("c1", Instant.now());
     conversation.append(
