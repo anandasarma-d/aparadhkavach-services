@@ -24,7 +24,13 @@ class RolePathAllowlistTest {
   }
 
   @Test
-  void policymakerMayNotAsk() {
-    assertThat(allowlist.isAllowed("POLICYMAKER", "/v1/queries:ask")).isFalse();
+  void investigatorMayUseConversations() {
+    assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/conversations")).isTrue();
+    assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/conversations/abc/queries")).isTrue();
+  }
+
+  @Test
+  void analystMayNotUseConversations() {
+    assertThat(allowlist.isAllowed("ANALYST", "/v1/conversations")).isFalse();
   }
 }

@@ -77,7 +77,8 @@ class QueryServiceTest {
     QueryResource result = service.ask(new QueryRequest("ACC-00040", null));
 
     assertThat(depthSeen.get()).isEqualTo(QueryService.QUERY_GRAPH_DEPTH);
-    assertThat(result.conversationId()).isEqualTo(QueryService.CONVERSATION_ID);
+    assertThat(result.conversationId()).isNotBlank();
+    assertThat(result.conversationId()).isNotEqualTo("mvp2-qa-sentinel");
     assertThat(result.answer()).contains("Claude is not configured");
     assertThat(result.evidenceSources()).isNotEmpty();
   }

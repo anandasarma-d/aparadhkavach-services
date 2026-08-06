@@ -27,15 +27,13 @@ import org.springframework.stereotype.Service;
 
 /**
  * F3 / mvp2/11 ask path: Investigation risk (when accused) + Neo4j depth <strong>1</strong> only →
- * one Claude call → conversational envelope.
+ * one Claude call → conversational envelope. Conversation persistence is owned by {@link
+ * ConversationService} (mvp2/12 Step A).
  */
 @Service
 public class QueryService {
 
   private static final Logger log = LoggerFactory.getLogger(QueryService.class);
-
-  /** Fixed sentinel — no conversation store in this slice. */
-  public static final String CONVERSATION_ID = "mvp2-qa-sentinel";
 
   /** Hard-cap for this endpoint — ignore GRAPH_NETWORK_DEFAULT_DEPTH / traversal depth 3. */
   public static final int QUERY_GRAPH_DEPTH = 1;
@@ -53,7 +51,16 @@ public class QueryService {
     this.claudeQueryBridge = claudeQueryBridge;
   }
 
+  /** Single-shot ask used by tests / internal callers — no conversation store. */
   public QueryResource ask(QueryRequest request) {
+    return ask(request, null);
+  }
+
+  /**
+   * @param conversationId real thread id from {@link ConversationService}, or {@code null} for a
+   *     one-off envelope (legacy sentinel avoided — callers should prefer ConversationService)
+   */
+  public QueryResource ask(QueryRequest request, String conversationId) {
     long started = System.currentTimeMillis();
     QuerySeed seed = resolveSeed(request);
 
@@ -121,10 +128,14 @@ public class QueryService {
             relatedEntities);
 
     long latencyMs = System.currentTimeMillis() - started;
-    log.info("ask done seed={} latencyMs={}", seed.entityId(), latencyMs);
+    String threadId =
+        conversationId == null || conversationId.isBlank()
+            ? UUID.randomUUID().toString()
+            : conversationId.trim();
+    log.info("ask done seed={} conversationId={} latencyMs={}", seed.entityId(), threadId, latencyMs);
     return new QueryResource(
         UUID.randomUUID().toString(),
-        CONVERSATION_ID,
+        threadId,
         model.answer(),
         evidence,
         relatedFirs,

@@ -58,4 +58,11 @@ public class GatewayController {
       throws IOException {
     return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }
+
+  /** Graph-RAC conversation store (mvp2/12 Step A). */
+  @RequestMapping("/v1/conversations/**")
+  public ResponseEntity<byte[]> routeConversationsToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
+  }
 }
