@@ -92,16 +92,25 @@ public class ClaudeQueryBridge {
   }
 
   public ClaudeAnswer complete(String contextBlock, String seedEntityId) {
-    return complete(contextBlock, seedEntityId, null);
+    return complete(contextBlock, seedEntityId, null, AskTask.GRAPH_BRIEFING);
   }
 
   /**
    * @param priorTurnsBlock optional PRIOR_TURNS text from {@link ConversationHistoryPacker} (Step D)
    */
   public ClaudeAnswer complete(String contextBlock, String seedEntityId, String priorTurnsBlock) {
+    return complete(contextBlock, seedEntityId, priorTurnsBlock, AskTask.GRAPH_BRIEFING);
+  }
+
+  /**
+   * @param task {@link AskTask#GRAPH_BRIEFING} (doc 11) or {@link AskTask#SIMILAR_CASES} (mvp2/12 Step
+   *     F)
+   */
+  public ClaudeAnswer complete(
+      String contextBlock, String seedEntityId, String priorTurnsBlock, AskTask task) {
     if (!isConfigured() || chatClient == null) {
       return unavailable(
-          "Claude is not configured on this environment (missing ANTHROPIC_API_KEY). "
+          "Answer generation is not configured on this environment. "
               + "Context was assembled for "
               + seedEntityId
               + " but no model call was made.",
@@ -111,6 +120,7 @@ public class ClaudeQueryBridge {
     String context = truncateContext(contextBlock);
     String history =
         priorTurnsBlock == null || priorTurnsBlock.isBlank() ? "" : priorTurnsBlock.trim() + "\n\n";
+    AskTask effective = task == null ? AskTask.GRAPH_BRIEFING : task;
     String user =
         "Seed entity: "
             + seedEntityId
@@ -118,10 +128,8 @@ public class ClaudeQueryBridge {
             + history
             + "CONTEXT:\n"
             + context
-            + "\n\nTask: In under 120 words across 2–4 short paragraphs (separate with blank lines),"
-            + " summarize what the record and immediate linked case records show about this seed"
-            + " for an investigating officer. Use plain language; never say CONTEXT, PRIOR_TURNS,"
-            + " Neo4j, or 1-hop. Answer only from CONTEXT (PRIOR_TURNS is continuity only)."
+            + "\n\nTask: "
+            + effective.userTask()
             + " Humanize place codes (MARKET_AREA → market area). Reply with ONLY the JSON object"
             + " required by the system prompt — no markdown, no preamble.";
 
@@ -161,11 +169,9 @@ public class ClaudeQueryBridge {
             ex.getMessage(),
             snippet(raw));
         return unavailable(
-            "Claude returned an unusable structured response for "
+            "Could not produce a usable answer for "
                 + seedEntityId
-                + " ("
-                + ex.getMessage()
-                + "). Context was assembled; try again shortly.",
+                + ". Context was assembled; try again shortly.",
             seedEntityId);
       }
     } catch (TimeoutException ex) {
@@ -176,11 +182,9 @@ public class ClaudeQueryBridge {
           CLAUDE_TIMEOUT_SECONDS,
           System.currentTimeMillis() - started);
       return unavailable(
-          "Claude timed out for "
+          "Answer timed out for "
               + seedEntityId
-              + " after "
-              + CLAUDE_TIMEOUT_SECONDS
-              + "s. Context was assembled; try again shortly.",
+              + " after assembling context; try again shortly.",
           seedEntityId);
     } catch (ExecutionException ex) {
       Throwable root = unwrap(ex);
@@ -191,7 +195,7 @@ public class ClaudeQueryBridge {
             System.currentTimeMillis() - started,
             validation.getMessage());
         return unavailable(
-            "Claude returned an unusable structured response for "
+            "Could not produce a usable answer for "
                 + seedEntityId
                 + ". Context was assembled; try again shortly.",
             seedEntityId);
@@ -202,10 +206,9 @@ public class ClaudeQueryBridge {
           System.currentTimeMillis() - started,
           root.toString());
       return unavailable(
-          "Claude call failed for "
+          "Answer generation failed for "
               + seedEntityId
-              + ". Context was assembled; try again shortly. Detail: "
-              + safeMessage(root instanceof Exception e ? e : new Exception(root)),
+              + ". Context was assembled; try again shortly.",
           seedEntityId);
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
@@ -215,7 +218,9 @@ public class ClaudeQueryBridge {
           seedEntityId,
           System.currentTimeMillis() - started);
       return unavailable(
-          "Claude call interrupted for " + seedEntityId + ". Context was assembled; try again.",
+          "Answer generation was interrupted for "
+              + seedEntityId
+              + ". Context was assembled; try again.",
           seedEntityId);
     }
   }
@@ -401,12 +406,31 @@ public class ClaudeQueryBridge {
     return oneLine.length() > 240 ? oneLine.substring(0, 240) + "…" : oneLine;
   }
 
-  private static String safeMessage(Exception ex) {
-    String m = ex.getMessage();
-    if (m == null || m.isBlank()) {
-      return ex.getClass().getSimpleName();
+  /** Which retrieval pack Claude is summarizing (mvp2/11 graph vs mvp2/12 Step F similar). */
+  public enum AskTask {
+    GRAPH_BRIEFING(
+        "In under 120 words across 2–4 short paragraphs (separate with blank lines),"
+            + " summarize what the record and immediate linked case records show about this seed"
+            + " for an investigating officer. Use plain language; never say CONTEXT, PRIOR_TURNS,"
+            + " Neo4j, or 1-hop. Answer only from CONTEXT (PRIOR_TURNS is continuity only)."),
+    SIMILAR_CASES(
+        "In under 120 words across 2–4 short paragraphs (separate with blank lines),"
+            + " summarize the nearest similar FIRs listed under similarHits for an investigating"
+            + " officer. Cite only FIR ids that appear in similarHits (plus the probe FIR if"
+            + " needed). Rank by the given similarity scores; do not invent case links or claim"
+            + " the cases are the same offender. Use plain language; never say CONTEXT,"
+            + " PRIOR_TURNS, PgVector, Voyage, or embedding. Answer only from CONTEXT"
+            + " (PRIOR_TURNS is continuity only). Put similar FIR ids in relatedFirs.");
+
+    private final String userTask;
+
+    AskTask(String userTask) {
+      this.userTask = userTask;
     }
-    return m.length() > 180 ? m.substring(0, 180) + "…" : m;
+
+    String userTask() {
+      return userTask;
+    }
   }
 
   public record RelatedEntity(String id, String type, String label) {}

@@ -38,4 +38,17 @@ public final class QueryContextConstants {
   /** Id conventions used when listing related FIRs. */
   public static final String FIR_ID_PREFIX = "FIR-";
   public static final String FIR_NODE_TYPE = "FIR";
+
+  /** mvp2/12 Step F — PgVector similar-cases CONTEXT. */
+  public static final String RETRIEVAL_MODE = "retrievalMode=";
+  public static final String RETRIEVAL_SIMILAR = "SIMILAR_CASES";
+  public static final String PROBE_FIR = "probeFirId=";
+  public static final String OFFICER_QUESTION = "officerQuestion=";
+  public static final String SIMILAR_HITS_HEADER = "similarHits:\n";
+  public static final String HIT_PREFIX = "  - firId=";
+  public static final String HIT_SCORE = " similarity=";
+  public static final String HIT_DISTRICT = " district=";
+  public static final String HIT_CRIME = " crimeType=";
+  public static final String HIT_FILED = " dateFiled=";
+  public static final String HIT_STATUS = " status=";
 }

@@ -20,8 +20,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Maps a free-text follow-up to an ACC-/FIR- seed using prior turn citations (mvp2/12 Step B).
- * Deterministic heuristics only — no extra Claude call. Ask seeds remain ACC-/FIR- only; cited
- * VEH-/LOC-/… ids resolve to the host accused/FIR that mentioned them.
+ * Deterministic heuristics only — no extra model call. Ask seeds remain ACC-/FIR- only; cited
+ * VEH-/plates resolve to the host accused/FIR. LOC- and location/place intents are refused until
+ * a dedicated retrieval path exists (D-107).
  */
 @Component
 public class FollowUpResolver {
@@ -47,29 +48,63 @@ public class FollowUpResolver {
           "No prior citations in this conversation to resolve the follow-up against. Ask with an ACC-/FIR- id first.");
     }
 
-    // 1) Explicit entity id — ACC/FIR direct; other cited types → host ACC/FIR.
+    String lower = text.toLowerCase(Locale.ROOT);
+
+    // 1) Explicit entity id — ACC/FIR direct; VEH- → host; LOC-/other → refuse (D-106/D-107).
     Matcher matcher = ENTITY_ID.matcher(text);
     List<String> mentioned = new ArrayList<>();
     while (matcher.find()) {
       mentioned.add(matcher.group(1).toUpperCase(Locale.ROOT));
     }
     for (String id : mentioned) {
-      QuerySeed seed = pool.toAskSeed(id);
-      if (seed != null) {
-        return seed;
+      if (id.startsWith("LOC-")) {
+        throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+      }
+      if (id.startsWith("VEH-")) {
+        QuerySeed seed = pool.toAskSeed(id);
+        if (seed != null) {
+          return seed;
+        }
+        continue;
+      }
+      if (id.startsWith("ACC-") || id.startsWith("FIR-")) {
+        QuerySeed seed = pool.toAskSeed(id);
+        if (seed != null) {
+          return seed;
+        }
+        continue;
+      }
+      // VIC-/WIT-/OFF-/… — do not silently remap to host (wrong briefing).
+      if (pool.containsId(id)) {
+        throw new ValidationException(
+            "Follow-up on "
+                + id
+                + " is not supported on this path yet. Ask about a cited accused or FIR, or tap an ACC-/FIR- citation.");
       }
     }
     if (!mentioned.isEmpty()) {
       throw new ValidationException(
           "Follow-up names "
               + String.join(", ", mentioned)
-              + " but that id is not in this thread’s citations. "
-              + "Use a cited id such as "
-              + pool.hintIds()
-              + ", or Ask that id as a new seed (New thread).");
+              + " but that id is not among the citations for this ask. "
+              + "Tap a cited ACC-/FIR- chip, or start a New thread with that id.");
     }
 
-    String lower = text.toLowerCase(Locale.ROOT);
+    // 1b) Similar-cases intent is routed by ConversationService → askSimilar (Step F).
+    // If resolve() sees it, refuse lastSeed remap and require a cited FIR probe message.
+    if (mentionsSimilarCases(lower)) {
+      if (hasLocationConstraint(lower) || mentionedContainsLoc(mentioned)) {
+        throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+      }
+      throw new ValidationException(
+          "Similar-cases follow-ups need a cited FIR to probe. "
+              + "Ask about an FIR first (or tap a Related FIR), then ask for similar cases.");
+    }
+
+    // 1c) Location / “cases at this place” intents — refuse before lastSeed remap (D-107).
+    if (mentionsLocationTopic(lower)) {
+      throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+    }
 
     // 2) Registration plate / vehicle id via label (handles minor OCR typos via normalized match)
     if (mentionsPlate(text)) {
@@ -84,10 +119,7 @@ public class FollowUpResolver {
         }
       }
       throw new ValidationException(
-          "Follow-up names a vehicle registration that is not in this thread’s citations. "
-              + "Use a plate or VEH- id from a prior answer, or ask the owning ACC-/FIR- such as "
-              + pool.hintIds()
-              + ".");
+          "That vehicle registration is not cited in the current answer.");
     }
 
     // 3) “the vehicle / number plate …” → host seed of a cited VEH-
@@ -96,11 +128,7 @@ public class FollowUpResolver {
       if (vehicleHost != null) {
         return vehicleHost;
       }
-      throw new ValidationException(
-          "This thread has no cited vehicle to follow up on. "
-              + "Ask an accused/FIR that mentions a vehicle, or name a cited ACC-/FIR- id such as "
-              + pool.hintIds()
-              + ".");
+      throw new ValidationException(noCitedVehicleMessage(pool.lastSeed()));
     }
 
     // 4) Co-accused / linked people → first ACC- from related entities / evidence
@@ -122,6 +150,9 @@ public class FollowUpResolver {
     // 6) Label substring match against related entity labels → ask seed (host if needed)
     String byLabel = pool.matchLabel(lower);
     if (byLabel != null) {
+      if (byLabel.startsWith("LOC-") || pool.isLocationEntity(byLabel)) {
+        throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+      }
       QuerySeed seed = pool.toAskSeed(byLabel);
       if (seed != null) {
         return seed;
@@ -139,10 +170,89 @@ public class FollowUpResolver {
     }
 
     throw new ValidationException(
-        "Could not resolve follow-up to an accused or FIR from prior citations. "
-            + "Try naming an id such as "
-            + pool.hintIds()
-            + ".");
+        "Could not resolve that follow-up from the current answer. "
+            + "Try a cited ACC-/FIR- id, or tap a citation chip.");
+  }
+
+  private static final String LOCATION_FOLLOW_UP_REFUSE =
+      "Location and “cases at this place” follow-ups are not supported on this path yet. "
+          + "Ask about a cited accused or FIR from the current answer.";
+
+  private static final String NO_SIMILAR_PROBE =
+      "No cited FIR is available to search similar cases from. "
+          + "Ask about an FIR first, or tap a Related FIR chip, then ask again.";
+
+  /**
+   * mvp2/12 Step F — officer wants nearest FIRs by narrative embedding (not a graph re-ask).
+   * Location-constrained “similar at this place” stays refuse (D-107).
+   */
+  public boolean isSimilarCasesIntent(String followUpText) {
+    if (followUpText == null || followUpText.isBlank()) {
+      return false;
+    }
+    String lower = followUpText.toLowerCase(Locale.ROOT);
+    if (!mentionsSimilarCases(lower)) {
+      return false;
+    }
+    return !hasLocationConstraint(lower) && !textMentionsLocId(followUpText);
+  }
+
+  /**
+   * Pick a cited FIR probe for Step F ANN. Prefers an explicit cited FIR in the text, else last FIR
+   * seed, else first related FIR in the citation pool.
+   */
+  public String resolveSimilarProbeFir(Conversation conversation, String followUpText) {
+    if (followUpText == null || followUpText.isBlank()) {
+      throw new ValidationException("followUp text is required for similar-cases intent");
+    }
+    String lower = followUpText.toLowerCase(Locale.ROOT);
+    if (hasLocationConstraint(lower) || textMentionsLocId(followUpText)) {
+      throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+    }
+    CitationPool pool = CitationPool.from(conversation);
+    if (pool.isEmpty() && pool.lastSeed() == null) {
+      throw new ValidationException(NO_SIMILAR_PROBE);
+    }
+
+    Matcher matcher = ENTITY_ID.matcher(followUpText);
+    List<String> mentionedFirs = new ArrayList<>();
+    while (matcher.find()) {
+      String id = matcher.group(1).toUpperCase(Locale.ROOT);
+      if (id.startsWith("FIR-")) {
+        mentionedFirs.add(id);
+      }
+      if (id.startsWith("LOC-")) {
+        throw new ValidationException(LOCATION_FOLLOW_UP_REFUSE);
+      }
+    }
+    for (String fir : mentionedFirs) {
+      if (pool.containsId(fir)) {
+        return fir;
+      }
+    }
+    if (!mentionedFirs.isEmpty()) {
+      throw new ValidationException(
+          "Follow-up names "
+              + String.join(", ", mentionedFirs)
+              + " but that FIR is not among the citations for this ask. "
+              + "Tap a cited FIR chip, then ask for similar cases.");
+    }
+
+    if (pool.lastSeed() != null && pool.lastSeed().kind() == QuerySeedKind.FIR) {
+      return pool.lastSeed().entityId();
+    }
+    String related = pool.firstFirNeighbor();
+    if (related != null) {
+      return related;
+    }
+    throw new ValidationException(NO_SIMILAR_PROBE);
+  }
+
+  private static String noCitedVehicleMessage(QuerySeed lastSeed) {
+    if (lastSeed != null && lastSeed.kind() == QuerySeedKind.FIR) {
+      return "This FIR has no cited vehicle in the current answer.";
+    }
+    return "This accused has no cited vehicle in the current answer.";
   }
 
   private static boolean mentionsSameSubject(String lower) {
@@ -189,10 +299,68 @@ public class FollowUpResolver {
         || lower.contains("the scooter");
   }
 
+  private static boolean mentionsSimilarCases(String lower) {
+    return lower.contains("similar case")
+        || lower.contains("similar fir")
+        || lower.contains("cases like this")
+        || lower.contains("case like this")
+        || lower.contains("like this story")
+        || lower.contains("like this narrative")
+        || lower.contains("find similar")
+        || lower.contains("semantically similar")
+        || (lower.contains("similar")
+            && (lower.contains("fir") || lower.contains("case") || lower.contains("cases")));
+  }
+
+  private static boolean hasLocationConstraint(String lower) {
+    return lower.contains("location")
+        || lower.contains("same place")
+        || lower.contains("same area")
+        || lower.contains("same locality")
+        || lower.contains("at that place")
+        || lower.contains("in that area")
+        || lower.contains("in the same location")
+        || lower.contains("cases in the same")
+        || lower.contains("cases at this")
+        || lower.contains("cases at that")
+        || lower.contains("other cases at")
+        || lower.contains("loc-");
+  }
+
+  private static boolean textMentionsLocId(String text) {
+    Matcher matcher = ENTITY_ID.matcher(text);
+    while (matcher.find()) {
+      if (matcher.group(1).toUpperCase(Locale.ROOT).startsWith("LOC-")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean mentionedContainsLoc(List<String> mentioned) {
+    for (String id : mentioned) {
+      if (id.startsWith("LOC-")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean mentionsLocationTopic(String lower) {
+    return hasLocationConstraint(lower)
+        || lower.contains("any other cases")
+        || (lower.contains("similar")
+            && (lower.contains("location")
+                || lower.contains("place")
+                || lower.contains("area")
+                || lower.contains("loc-")));
+  }
+
   /** Topics we must not silently remap to the last ACC/FIR (caused duplicate briefings). */
   private static boolean looksLikeSpecificUnsupportedTopic(String lower) {
     return mentionsVehicle(lower)
-        || lower.contains("location")
+        || mentionsLocationTopic(lower)
+        || mentionsSimilarCases(lower)
         || lower.contains("witness")
         || lower.contains("victim")
         || lower.contains("officer")
@@ -267,6 +435,26 @@ public class FollowUpResolver {
 
     boolean isEmpty() {
       return ids.isEmpty();
+    }
+
+    boolean containsId(String id) {
+      return ids.contains(id.trim().toUpperCase(Locale.ROOT));
+    }
+
+    boolean isLocationEntity(String id) {
+      String upper = id.trim().toUpperCase(Locale.ROOT);
+      if (upper.startsWith("LOC-")) {
+        return true;
+      }
+      for (RelatedEntityRef ref : entities) {
+        if (ref.id() != null
+            && ref.id().equalsIgnoreCase(upper)
+            && ref.type() != null
+            && ref.type().toLowerCase(Locale.ROOT).contains("location")) {
+          return true;
+        }
+      }
+      return false;
     }
 
     QuerySeed lastSeed() {
@@ -414,27 +602,6 @@ public class FollowUpResolver {
         }
       }
       return best == null ? null : best.id().trim().toUpperCase(Locale.ROOT);
-    }
-
-    String hintIds() {
-      List<String> hints = new ArrayList<>();
-      for (String id : ids) {
-        if (id.startsWith("ACC-") || id.startsWith("FIR-")) {
-          hints.add(id);
-        }
-        if (hints.size() >= 3) {
-          break;
-        }
-      }
-      if (hints.isEmpty()) {
-        for (String id : ids) {
-          hints.add(id);
-          if (hints.size() >= 3) {
-            break;
-          }
-        }
-      }
-      return hints.isEmpty() ? "ACC-… / FIR-…" : String.join(", ", hints);
     }
 
     private static boolean isVehicleType(String type) {

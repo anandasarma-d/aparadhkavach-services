@@ -18,6 +18,10 @@ import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileSnap
 import dev.aparadhkavach.orchestration.query.config.QueryProperties;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessageRole;
 import dev.aparadhkavach.orchestration.query.conversation.InMemoryConversationStore;
+import dev.aparadhkavach.orchestration.search.config.VectorProperties;
+import dev.aparadhkavach.orchestration.search.model.SimilarCase;
+import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
+import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -98,6 +102,24 @@ class ConversationServiceTest {
   }
 
   @Test
+  void ask_followUp_similarCases_usesProbeFir() {
+    ConversationService conversations = newConversationService();
+    QueryResource first = conversations.ask(null, new QueryRequest(null, "FIR-003276"));
+
+    QueryResource follow =
+        conversations.ask(
+            first.conversationId(),
+            new QueryRequest(null, null, first.conversationId(), "find similar cases"));
+
+    assertThat(follow.conversationId()).isEqualTo(first.conversationId());
+    assertThat(follow.relatedFirs()).contains("FIR-999001", "FIR-999002");
+    assertThat(conversations.get(first.conversationId()).messages().get(2).text())
+        .contains("similar");
+    assertThat(conversations.get(first.conversationId()).messages().get(2).firId())
+        .isEqualTo("FIR-003276");
+  }
+
+  @Test
   void get_unknownConversation_throws() {
     ConversationService conversations = newConversationService();
     assertThatThrownBy(() -> conversations.get("missing-id"))
@@ -143,7 +165,19 @@ class ConversationServiceTest {
         };
     ClaudeQueryBridge bridge =
         ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
-    QueryService queryService = new QueryService(networkService, investigation, bridge);
+    SimilarCasesService similar =
+        new SimilarCasesService(null, new VectorProperties()) {
+          @Override
+          public SimilarCasesResult findSimilar(String rawFirId, Integer requestedLimit) {
+            return new SimilarCasesResult(
+                rawFirId,
+                5,
+                List.of(
+                    new SimilarCase("FIR-999001", 0.94, "Mysuru", "Burglary", null, "UI"),
+                    new SimilarCase("FIR-999002", 0.91, "Kodagu", "Burglary", null, "UI")));
+          }
+        };
+    QueryService queryService = new QueryService(networkService, investigation, bridge, similar);
     return new ConversationService(
         new InMemoryConversationStore(),
         queryService,

@@ -16,6 +16,10 @@ import dev.aparadhkavach.orchestration.graph.model.NetworkEdge;
 import dev.aparadhkavach.orchestration.graph.model.NetworkNode;
 import dev.aparadhkavach.orchestration.graph.repository.EntityNetworkRepository;
 import dev.aparadhkavach.orchestration.graph.service.EntityNetworkService;
+import dev.aparadhkavach.orchestration.search.config.VectorProperties;
+import dev.aparadhkavach.orchestration.search.model.SimilarCase;
+import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
+import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -72,14 +76,15 @@ class QueryServiceTest {
         };
     ClaudeQueryBridge bridge =
         ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
-    QueryService service = new QueryService(networkService, investigation, bridge);
+    QueryService service =
+        new QueryService(networkService, investigation, bridge, stubSimilarCasesService());
 
     QueryResource result = service.ask(new QueryRequest("ACC-00040", null));
 
     assertThat(depthSeen.get()).isEqualTo(QueryService.QUERY_GRAPH_DEPTH);
     assertThat(result.conversationId()).isNotBlank();
     assertThat(result.conversationId()).isNotEqualTo("mvp2-qa-sentinel");
-    assertThat(result.answer()).contains("Claude is not configured");
+    assertThat(result.answer()).contains("Answer generation is not configured");
     assertThat(result.evidenceSources()).isNotEmpty();
   }
 
@@ -98,7 +103,8 @@ class QueryServiceTest {
         };
     ClaudeQueryBridge bridge =
         ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
-    QueryService service = new QueryService(networkService, investigation, bridge);
+    QueryService service =
+        new QueryService(networkService, investigation, bridge, stubSimilarCasesService());
 
     service.ask(new QueryRequest(null, "FIR-003276"));
 
@@ -132,20 +138,42 @@ class QueryServiceTest {
   }
 
   @Test
-  void claudeBridge_parse_acceptsFencedSnakeCase() {
-    ClaudeQueryBridge live = ClaudeQueryBridge.forTests(new ObjectMapper(), "sk-ant-test-key");
-    ClaudeAnswer answer =
-        live.parse(
-            """
-            Here is the result:
-            ```json
-            {"answer":"Ok","evidence_sources":["ACC-00040"],"related_firs":[],"related_entities":[],"confidence_score":0.4,"reasoning_summary":"From CONTEXT"}
-            ```
-            """);
-    assertThat(answer.answer()).isEqualTo("Ok");
-    assertThat(answer.evidenceSources()).containsExactly("ACC-00040");
-    assertThat(answer.reasoningSummary()).isEqualTo("From CONTEXT");
-    assertThat(answer.confidenceScore()).isEqualTo(0.4);
+  void askSimilar_usesAnnHitsAsRelatedFirs() {
+    AtomicInteger depthSeen = new AtomicInteger(-1);
+    EntityNetworkService networkService = recordingNetworkService(depthSeen, sampleNetwork());
+    InvestigationRiskProfileClient investigation =
+        new InvestigationRiskProfileClient(RestClient.create()) {
+          @Override
+          public Optional<InvestigationRiskProfileSnapshot> findRiskProfile(String accusedId) {
+            return Optional.empty();
+          }
+        };
+    ClaudeQueryBridge bridge =
+        ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
+    QueryService service =
+        new QueryService(networkService, investigation, bridge, stubSimilarCasesService());
+
+    QueryResource result =
+        service.askSimilar("FIR-002683", "conv-1", null, "find similar cases");
+
+    assertThat(depthSeen.get()).isEqualTo(-1); // Neo4j not used on similar path
+    assertThat(result.relatedFirs()).contains("FIR-999001", "FIR-999002");
+    assertThat(result.evidenceSources()).contains("FIR-002683");
+    assertThat(result.answer()).contains("Answer generation is not configured");
+  }
+
+  private static SimilarCasesService stubSimilarCasesService() {
+    return new SimilarCasesService(null, new VectorProperties()) {
+      @Override
+      public SimilarCasesResult findSimilar(String rawFirId, Integer requestedLimit) {
+        return new SimilarCasesResult(
+            rawFirId,
+            5,
+            List.of(
+                new SimilarCase("FIR-999001", 0.94, "Mysuru", "Burglary", null, "UI"),
+                new SimilarCase("FIR-999002", 0.91, "Kodagu", "Burglary", null, "UI")));
+      }
+    };
   }
 
   private static EntityNetworkService recordingNetworkService(

@@ -30,7 +30,9 @@ class FollowUpResolverTest {
     Conversation conversation = seededConversation();
     assertThatThrownBy(() -> resolver.resolve(conversation, "tell me about FIR-003276"))
         .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("not in this thread");
+        .hasMessageContaining("not among the citations")
+        .hasMessageNotContaining("FIR-000971")
+        .hasMessageNotContaining("ACC-00439");
   }
 
   @Test
@@ -110,7 +112,95 @@ class FollowUpResolverTest {
     Conversation conversation = seededConversation();
     assertThatThrownBy(() -> resolver.resolve(conversation, "what about the vehicle used?"))
         .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("no cited vehicle");
+        .hasMessageContaining("This accused has no cited vehicle")
+        .hasMessageNotContaining("ACC-00439")
+        .hasMessageNotContaining("FIR-000971");
+  }
+
+  @Test
+  void locationIdFollowUp_rejected() {
+    Conversation conversation = conversationWithLocation();
+    assertThatThrownBy(
+            () ->
+                resolver.resolve(
+                    conversation, "any other cases in the same location - loc-00273"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("Location")
+        .hasMessageNotContaining("FIR-000971");
+  }
+
+  @Test
+  void locationTopicWithoutId_rejected() {
+    Conversation conversation = conversationWithLocation();
+    assertThatThrownBy(
+            () -> resolver.resolve(conversation, "any other cases in the same location"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("Location");
+  }
+
+  @Test
+  void similarCasesIntent_detected() {
+    assertThat(resolver.isSimilarCasesIntent("find similar cases")).isTrue();
+    assertThat(resolver.isSimilarCasesIntent("cases like this")).isTrue();
+    assertThat(resolver.isSimilarCasesIntent("similar cases at that location")).isFalse();
+    assertThat(resolver.isSimilarCasesIntent("what about the vehicle?")).isFalse();
+  }
+
+  @Test
+  void resolveSimilarProbeFir_fromLastFirSeed() {
+    Conversation conversation = conversationWithLocation();
+    assertThat(resolver.resolveSimilarProbeFir(conversation, "find similar cases"))
+        .isEqualTo("FIR-000971");
+  }
+
+  @Test
+  void resolveSimilarProbeFir_fromRelatedFirWhenLastSeedAccused() {
+    Conversation conversation = seededConversation();
+    assertThat(resolver.resolveSimilarProbeFir(conversation, "cases like this"))
+        .isEqualTo("FIR-000971");
+  }
+
+  @Test
+  void resolveSimilarProbeFir_locationConstrained_rejected() {
+    Conversation conversation = conversationWithLocation();
+    assertThatThrownBy(
+            () ->
+                resolver.resolveSimilarProbeFir(
+                    conversation, "similar cases in the same location - loc-00273"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("Location");
+  }
+
+  private static Conversation conversationWithLocation() {
+    Conversation conversation = new Conversation("c-loc", Instant.now());
+    conversation.append(
+        new ConversationMessage(
+            "m1",
+            ConversationMessageRole.USER,
+            Instant.now(),
+            "Tell me about FIR-000971",
+            null,
+            "FIR-000971",
+            null,
+            List.of(),
+            List.of(),
+            List.of()));
+    conversation.append(
+        new ConversationMessage(
+            "m2",
+            ConversationMessageRole.ASSISTANT,
+            Instant.now(),
+            "FIR at Chamarajanagar highway…",
+            null,
+            "FIR-000971",
+            "q1",
+            List.of("FIR-000971"),
+            List.of("FIR-000978", "FIR-000969"),
+            List.of(
+                new RelatedEntityRef("LOC-00273", "Location", "Chamarajanagar highway area"),
+                new RelatedEntityRef("ACC-00040", "Accused", "Praneel Andra"),
+                new RelatedEntityRef("OFF-0100", "InvestigationOfficer", "Ishani Prashad"))));
+    return conversation;
   }
 
   private static Conversation conversationWithVehicle() {

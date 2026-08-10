@@ -1,18 +1,28 @@
 package dev.aparadhkavach.orchestration.query.service;
 
-import static dev.aparadhkavach.orchestration.query.QueryContextConstants.EDGES_HEADER;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.EDGE_PREFIX;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.EDGE_REL_CLOSE;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.EDGE_REL_OPEN;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.EDGES_HEADER;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.FIR_ID_PREFIX;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.FIR_NODE_TYPE;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.GRAPH_DEPTH;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.GRAPH_TRUNCATED;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_CRIME;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_DISTRICT;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_FILED;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_PREFIX;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_SCORE;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.HIT_STATUS;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.MISSING_VALUE;
-import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODES_HEADER;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODE_LABEL;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODE_PREFIX;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODE_TYPE;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODES_HEADER;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.OFFICER_QUESTION;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.PROBE_FIR;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RETRIEVAL_MODE;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RETRIEVAL_SIMILAR;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_ACCUSED_ID;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_ADDRESS_DISTRICT_ID;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_NAME;
@@ -22,11 +32,13 @@ import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_P
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_SCORE;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.SEED_ID;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.SEED_KIND;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.SIMILAR_HITS_HEADER;
 
 import dev.aparadhkavach.orchestration.graph.model.EntityNetwork;
 import dev.aparadhkavach.orchestration.graph.model.NetworkEdge;
 import dev.aparadhkavach.orchestration.graph.model.NetworkNode;
 import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileSnapshot;
+import dev.aparadhkavach.orchestration.search.model.SimilarCase;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,6 +91,40 @@ final class QueryContextAssembler {
           .append(edge.type())
           .append(EDGE_REL_CLOSE)
           .append(edge.to())
+          .append('\n');
+    }
+    return sb.toString();
+  }
+
+  /** mvp2/12 Step F — ranked PgVector neighbors only (no Neo4j / Investigation pack). */
+  static String assembleSimilar(
+      String probeFirId, List<SimilarCase> hits, String officerQuestion) {
+    StringBuilder sb = new StringBuilder(1024);
+    sb.append(RETRIEVAL_MODE).append(RETRIEVAL_SIMILAR).append('\n');
+    sb.append(SEED_KIND).append(RETRIEVAL_SIMILAR).append('\n');
+    sb.append(SEED_ID).append(probeFirId).append('\n');
+    sb.append(PROBE_FIR).append(probeFirId).append('\n');
+    if (officerQuestion != null && !officerQuestion.isBlank()) {
+      sb.append(OFFICER_QUESTION).append(officerQuestion.trim()).append('\n');
+    }
+    sb.append(SIMILAR_HITS_HEADER);
+    if (hits == null || hits.isEmpty()) {
+      sb.append("  (none)\n");
+      return sb.toString();
+    }
+    for (SimilarCase hit : hits) {
+      sb.append(HIT_PREFIX)
+          .append(nullToDash(hit.firId()))
+          .append(HIT_SCORE)
+          .append(String.format(java.util.Locale.ROOT, "%.3f", hit.similarityScore()))
+          .append(HIT_DISTRICT)
+          .append(nullToDash(hit.district()))
+          .append(HIT_CRIME)
+          .append(nullToDash(hit.crimeType()))
+          .append(HIT_FILED)
+          .append(hit.dateFiled() == null ? MISSING_VALUE : hit.dateFiled().toString())
+          .append(HIT_STATUS)
+          .append(nullToDash(hit.status()))
           .append('\n');
     }
     return sb.toString();

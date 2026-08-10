@@ -26,9 +26,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B/D). Follow-ups resolve to ACC-/FIR- seeds
- * from prior citations, re-retrieve via {@link QueryService}, and pack a bounded history window into
- * Claude (Step D).
+ * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B/D/F). Follow-ups resolve to ACC-/FIR-
+ * seeds from prior citations, or to a similar-cases PgVector ask (Step F), then pack a bounded
+ * history window into Claude (Step D).
  */
 @Service
 public class ConversationService {
@@ -76,6 +76,40 @@ public class ConversationService {
 
     Conversation conversation = resolveConversation(conversationId, request, hasSeed, hasFollowUp);
 
+    String priorTurns =
+        ConversationHistoryPacker.pack(
+            conversation.messages(),
+            queryProperties.getHistoryMaxTurns(),
+            queryProperties.getHistoryMaxChars(),
+            queryProperties.getHistoryMaxTurnChars());
+    if (!priorTurns.isBlank()) {
+      log.info(
+          "prompt packing conversationId={} historyChars={} maxTurns={}",
+          conversation.conversationId(),
+          priorTurns.length(),
+          queryProperties.getHistoryMaxTurns());
+    }
+
+    // mvp2/12 Step F — similar-cases intent → PgVector ANN (before ACC/FIR seed resolve).
+    if (!hasSeed && hasFollowUp && followUpResolver.isSimilarCasesIntent(request.followUp())) {
+      String probeFir = followUpResolver.resolveSimilarProbeFir(conversation, request.followUp());
+      log.info(
+          "follow-up similar conversationId={} text='{}' → probeFir={}",
+          conversation.conversationId(),
+          truncate(request.followUp()),
+          probeFir);
+      QueryResource answer =
+          queryService.askSimilar(
+              probeFir, conversation.conversationId(), priorTurns, request.followUp());
+      appendTurns(
+          conversation,
+          request.followUp().trim(),
+          null,
+          probeFir,
+          answer);
+      return answer;
+    }
+
     QueryRequest effective = request;
     if (!hasSeed && hasFollowUp) {
       QuerySeed resolved = followUpResolver.resolve(conversation, request.followUp());
@@ -93,24 +127,26 @@ public class ConversationService {
                   null, resolved.entityId(), conversation.conversationId(), request.followUp());
     }
 
-    String priorTurns =
-        ConversationHistoryPacker.pack(
-            conversation.messages(),
-            queryProperties.getHistoryMaxTurns(),
-            queryProperties.getHistoryMaxChars(),
-            queryProperties.getHistoryMaxTurnChars());
-    if (!priorTurns.isBlank()) {
-      log.info(
-          "prompt packing conversationId={} historyChars={} maxTurns={}",
-          conversation.conversationId(),
-          priorTurns.length(),
-          queryProperties.getHistoryMaxTurns());
-    }
-
     QueryResource answer =
         queryService.ask(effective, conversation.conversationId(), priorTurns);
 
     String userText = userTurnText(effective, hasFollowUp ? request.followUp() : null);
+    appendTurns(
+        conversation,
+        userText,
+        blankToNull(effective == null ? null : effective.accusedId()),
+        blankToNull(effective == null ? null : effective.firId()),
+        answer);
+
+    return answer;
+  }
+
+  private static void appendTurns(
+      Conversation conversation,
+      String userText,
+      String accusedId,
+      String firId,
+      QueryResource answer) {
     List<RelatedEntityRef> relatedRefs = toRefs(answer.relatedEntities());
 
     conversation.append(
@@ -119,8 +155,8 @@ public class ConversationService {
             ConversationMessageRole.USER,
             Instant.now(),
             userText,
-            blankToNull(effective == null ? null : effective.accusedId()),
-            blankToNull(effective == null ? null : effective.firId()),
+            accusedId,
+            firId,
             null,
             List.of(),
             List.of(),
@@ -132,14 +168,12 @@ public class ConversationService {
             ConversationMessageRole.ASSISTANT,
             Instant.now(),
             answer.answer(),
-            blankToNull(effective == null ? null : effective.accusedId()),
-            blankToNull(effective == null ? null : effective.firId()),
+            accusedId,
+            firId,
             answer.queryId(),
             answer.evidenceSources() == null ? List.of() : List.copyOf(answer.evidenceSources()),
             answer.relatedFirs() == null ? List.of() : List.copyOf(answer.relatedFirs()),
             relatedRefs));
-
-    return answer;
   }
 
   private Conversation resolveConversation(

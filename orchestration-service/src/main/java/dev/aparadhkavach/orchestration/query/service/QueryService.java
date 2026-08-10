@@ -12,8 +12,12 @@ import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileClie
 import dev.aparadhkavach.orchestration.query.client.InvestigationRiskProfileSnapshot;
 import dev.aparadhkavach.orchestration.query.model.QuerySeed;
 import dev.aparadhkavach.orchestration.query.model.QuerySeedKind;
+import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.AskTask;
 import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.ClaudeAnswer;
 import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.RelatedEntity;
+import dev.aparadhkavach.orchestration.search.model.SimilarCase;
+import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
+import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,7 +32,7 @@ import org.springframework.stereotype.Service;
 /**
  * F3 / mvp2/11 ask path: Investigation risk (when accused) + Neo4j depth <strong>1</strong> only →
  * one Claude call → conversational envelope. Conversation persistence is owned by {@link
- * ConversationService} (mvp2/12 Step A).
+ * ConversationService} (mvp2/12 Step A). Step F similar-cases asks use {@link #askSimilar}.
  */
 @Service
 public class QueryService {
@@ -41,14 +45,17 @@ public class QueryService {
   private final EntityNetworkService entityNetworkService;
   private final InvestigationRiskProfileClient investigationRiskProfileClient;
   private final ClaudeQueryBridge claudeQueryBridge;
+  private final SimilarCasesService similarCasesService;
 
   public QueryService(
       EntityNetworkService entityNetworkService,
       InvestigationRiskProfileClient investigationRiskProfileClient,
-      ClaudeQueryBridge claudeQueryBridge) {
+      ClaudeQueryBridge claudeQueryBridge,
+      SimilarCasesService similarCasesService) {
     this.entityNetworkService = entityNetworkService;
     this.investigationRiskProfileClient = investigationRiskProfileClient;
     this.claudeQueryBridge = claudeQueryBridge;
+    this.similarCasesService = similarCasesService;
   }
 
   /** Single-shot ask used by tests / internal callers — no conversation store. */
@@ -106,7 +113,7 @@ public class QueryService {
 
     t0 = System.currentTimeMillis();
     ClaudeAnswer model =
-        claudeQueryBridge.complete(context, seed.entityId(), priorTurnsBlock);
+        claudeQueryBridge.complete(context, seed.entityId(), priorTurnsBlock, AskTask.GRAPH_BRIEFING);
     log.info(
         "ask phase=claude seed={} confidence={} historyChars={} tookMs={}",
         seed.entityId(),
@@ -153,6 +160,100 @@ public class QueryService {
         model.confidenceScore(),
         model.reasoningSummary(),
         latencyMs);
+  }
+
+  /**
+   * mvp2/12 Step F — similar-cases ask: PgVector ANN from a probe FIR → Claude over those hits only
+   * (same conversational envelope as {@link #ask}).
+   */
+  public QueryResource askSimilar(
+      String probeFirId, String conversationId, String priorTurnsBlock, String officerQuestion) {
+    long started = System.currentTimeMillis();
+    String firId = EntityIdFormat.requireValid(probeFirId);
+    requirePrefix(firId, "FIR-", "firId");
+
+    long t0 = System.currentTimeMillis();
+    SimilarCasesResult similar = similarCasesService.findSimilar(firId, null);
+    List<SimilarCase> hits = similar.similarCases();
+    log.info(
+        "ask phase=similar probeFir={} hits={} tookMs={}",
+        firId,
+        hits.size(),
+        System.currentTimeMillis() - t0);
+
+    String context = QueryContextAssembler.assembleSimilar(firId, hits, officerQuestion);
+
+    t0 = System.currentTimeMillis();
+    ClaudeAnswer model =
+        claudeQueryBridge.complete(
+            context, firId, priorTurnsBlock, AskTask.SIMILAR_CASES);
+    log.info(
+        "ask phase=claude mode=similar seed={} confidence={} historyChars={} tookMs={}",
+        firId,
+        model.confidenceScore(),
+        priorTurnsBlock == null || priorTurnsBlock.isBlank() ? 0 : priorTurnsBlock.length(),
+        System.currentTimeMillis() - t0);
+
+    Set<String> annIds = new LinkedHashSet<>();
+    for (SimilarCase hit : hits) {
+      if (hit.firId() != null && !hit.firId().isBlank()) {
+        annIds.add(hit.firId());
+      }
+    }
+    List<String> annList = List.copyOf(annIds);
+    List<String> relatedFirs =
+        withoutSeed(
+            filterToAllowed(
+                model.relatedFirs().isEmpty() ? annList : model.relatedFirs(), annIds),
+            firId);
+    if (relatedFirs.isEmpty()) {
+      relatedFirs = withoutSeed(annList, firId);
+    }
+    List<RelatedEntityResource> relatedEntities =
+        dedupeEntities(
+            model.relatedEntities().isEmpty()
+                ? List.of()
+                : mapEntities(model.relatedEntities()),
+            firId,
+            relatedFirs);
+    List<String> evidence =
+        evidenceMinusRelated(
+            mergeEvidence(model.evidenceSources(), mergeEvidence(List.of(firId), annList)),
+            firId,
+            relatedFirs,
+            relatedEntities);
+
+    long latencyMs = System.currentTimeMillis() - started;
+    String threadId =
+        conversationId == null || conversationId.isBlank()
+            ? UUID.randomUUID().toString()
+            : conversationId.trim();
+    log.info(
+        "ask done mode=similar seed={} conversationId={} latencyMs={}",
+        firId,
+        threadId,
+        latencyMs);
+    return new QueryResource(
+        UUID.randomUUID().toString(),
+        threadId,
+        model.answer(),
+        evidence,
+        relatedFirs,
+        relatedEntities,
+        model.confidenceScore(),
+        model.reasoningSummary(),
+        latencyMs);
+  }
+
+  /** Keep model-cited FIR ids that appear in the ANN hit set (no invented neighbors). */
+  private static List<String> filterToAllowed(List<String> ids, Set<String> allowed) {
+    List<String> out = new ArrayList<>();
+    for (String id : ids) {
+      if (id != null && !id.isBlank() && allowed.contains(id)) {
+        out.add(id);
+      }
+    }
+    return List.copyOf(out);
   }
 
   static QuerySeed resolveSeed(QueryRequest request) {
