@@ -20,7 +20,8 @@
 #   ./appsail-build-deploy-health.sh --health
 #
 # MODULE names: analytics-service | investigation-service |
-#               api-gateway-service | orchestration-service
+#               api-gateway-service | orchestration-service | auth-service |
+#               stt-service (delegates to ../aparadhkavach-stt-service → project aparadhkavach-workbench-stt)
 #
 # Project targeting (deploy always uses --project; do not rely on project:use alone):
 #   --project NAME              preferred (e.g. aparadhkavach-workbench)
@@ -62,6 +63,10 @@ ALL_MODULES=(
   orchestration-service
   auth-service
 )
+
+# Python STT lives in sibling repo; --only stt-service delegates there.
+STT_MODULE="stt-service"
+STT_REPO_SCRIPT="$(cd "$ROOT/.." && pwd)/aparadhkavach-stt-service/appsail-build-deploy-health.sh"
 
 DO_BUILD=0
 DO_DEPLOY=0
@@ -202,6 +207,33 @@ fi
 
 MODULES=()
 if [[ -n "$ONLY_MODULE" ]]; then
+  # Delegate Python STT to sibling repo script (same flags).
+  if [[ "$ONLY_MODULE" == "$STT_MODULE" || "$ONLY_MODULE" == "aparadhkavach-stt-service" ]]; then
+    if [[ ! -x "$STT_REPO_SCRIPT" ]]; then
+      echo "STT deploy script not found/executable: $STT_REPO_SCRIPT" >&2
+      exit 1
+    fi
+    echo "Delegating to aparadhkavach-stt-service → $STT_REPO_SCRIPT"
+    # STT lives in aparadhkavach-workbench-stt (own AppSail quota), not Lane B Java project.
+    STT_PROJECT="${STT_CATALYST_PROJECT:-aparadhkavach-workbench-stt}"
+    if [[ "$CATALYST_PROJECT" == "aparadhkavach-workbench-stt" ]]; then
+      STT_PROJECT="$CATALYST_PROJECT"
+    elif [[ "$CATALYST_PROJECT" != "aparadhkavach-workbench" && "$CATALYST_PROJECT" != "aparadhkavach-dev" ]]; then
+      # Honor explicit non-Java project if caller passed one.
+      STT_PROJECT="$CATALYST_PROJECT"
+    fi
+    echo "  STT Catalyst project: ${STT_PROJECT}"
+    args=()
+    if [[ "$DO_BUILD" -eq 1 && "$DO_DEPLOY" -eq 1 && "$DEPLOY_MODE" == "as-is" ]]; then
+      args+=(--build-deploy)
+    else
+      [[ "$DO_BUILD" -eq 1 ]] && args+=(--build)
+      [[ "$DO_DEPLOY" -eq 1 ]] && args+=(--deploy)
+    fi
+    [[ "$DO_HEALTH" -eq 1 ]] && args+=(--health)
+    args+=(--project "$STT_PROJECT" --only stt-service)
+    exec "$STT_REPO_SCRIPT" "${args[@]}"
+  fi
   found=0
   for m in "${ALL_MODULES[@]}"; do
     if [[ "$m" == "$ONLY_MODULE" ]]; then
@@ -211,7 +243,7 @@ if [[ -n "$ONLY_MODULE" ]]; then
   done
   if [[ "$found" -ne 1 ]]; then
     echo "Unknown module: $ONLY_MODULE" >&2
-    echo "Expected one of: ${ALL_MODULES[*]}" >&2
+    echo "Expected one of: ${ALL_MODULES[*]} $STT_MODULE" >&2
     exit 1
   fi
   MODULES=("$ONLY_MODULE")

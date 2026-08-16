@@ -51,10 +51,22 @@ class FollowUpResolverTest {
   }
 
   @Test
-  void emptyHistory_rejected() {
+  void emptyHistory_rejectedWithoutEntityId() {
     Conversation empty = new Conversation("c1", Instant.now());
     assertThatThrownBy(() -> resolver.resolve(empty, "co-accused?"))
         .isInstanceOf(ValidationException.class);
+  }
+
+  @Test
+  void emptyHistory_acceptsSpokenAccusedOrFirSeed() {
+    Conversation empty = new Conversation("c1", Instant.now());
+    var accused = resolver.resolve(empty, "Ask about ACC-00040");
+    assertThat(accused.kind()).isEqualTo(QuerySeedKind.ACCUSED);
+    assertThat(accused.entityId()).isEqualTo("ACC-00040");
+
+    var fir = resolver.resolve(empty, "Tell me about FIR-003276 please");
+    assertThat(fir.kind()).isEqualTo(QuerySeedKind.FIR);
+    assertThat(fir.entityId()).isEqualTo("FIR-003276");
   }
 
   @Test

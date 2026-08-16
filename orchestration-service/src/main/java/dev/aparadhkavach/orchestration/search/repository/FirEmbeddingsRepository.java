@@ -35,6 +35,19 @@ public class FirEmbeddingsRepository {
       LIMIT :limit
       """;
 
+  private static final String SIMILAR_BY_VECTOR_SQL =
+      """
+      SELECT f.fir_id,
+             f.district,
+             f.crime_type,
+             f.date_filed,
+             f.status,
+             (1.0 - (f.embedding <=> CAST(:probe AS vector))) AS similarity_score
+      FROM fir_embeddings f
+      ORDER BY f.embedding <=> CAST(:probe AS vector)
+      LIMIT :limit
+      """;
+
   private final NamedParameterJdbcTemplate jdbc;
 
   public FirEmbeddingsRepository(NamedParameterJdbcTemplate jdbc) {
@@ -74,6 +87,42 @@ public class FirEmbeddingsRepository {
       throw new ResourceNotFoundException("No embedding for firId=" + firId);
     }
     return List.of();
+  }
+
+  /**
+   * Cosine nearest neighbors for a freshly embedded query vector (typed-text similar). Does not
+   * exclude any FIR (no probe id).
+   */
+  public List<SimilarCase> findSimilarByEmbedding(float[] embedding, int limit) {
+    if (embedding == null || embedding.length == 0) {
+      return List.of();
+    }
+    String probe = toPgVectorLiteral(embedding);
+    return jdbc.query(
+        SIMILAR_BY_VECTOR_SQL,
+        Map.of("probe", probe, "limit", limit),
+        (rs, rowNum) ->
+            new SimilarCase(
+                rs.getString("fir_id"),
+                rs.getDouble("similarity_score"),
+                rs.getString("district"),
+                rs.getString("crime_type"),
+                toLocalDate(rs.getDate("date_filed")),
+                rs.getString("status")));
+  }
+
+  /** pgvector text form {@code [0.1,0.2,...]} for {@code CAST(:probe AS vector)}. */
+  static String toPgVectorLiteral(float[] embedding) {
+    StringBuilder sb = new StringBuilder(embedding.length * 8);
+    sb.append('[');
+    for (int i = 0; i < embedding.length; i++) {
+      if (i > 0) {
+        sb.append(',');
+      }
+      sb.append(Float.toString(embedding[i]));
+    }
+    sb.append(']');
+    return sb.toString();
   }
 
   private static LocalDate toLocalDate(Date date) {

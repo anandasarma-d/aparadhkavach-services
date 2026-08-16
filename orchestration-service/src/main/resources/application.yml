@@ -5,6 +5,11 @@ spring:
   application:
     name: orchestration-service
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
   autoconfigure:
     exclude:
       # PgVectorStoreAutoConfiguration requires an EmbeddingModel bean. The custom Voyage
@@ -76,6 +81,9 @@ aparadhkavach:
     history-max-turns: ${QUERY_HISTORY_MAX_TURNS:6}
     history-max-chars: ${QUERY_HISTORY_MAX_CHARS:2500}
     history-max-turn-chars: ${QUERY_HISTORY_MAX_TURN_CHARS:400}
+    # mvp2/12 Step G — jdbc (Supabase qa_* tables) | memory (tests / local without schema)
+    conversation-store: ${QUERY_CONVERSATION_STORE:jdbc}
+    conversation-ttl-days: ${QUERY_CONVERSATION_TTL_DAYS:7}
     system-prompt: |
       You are AparadhKavach investigator assist for {jurisdiction} Police.
       Answer ONLY from the CONTEXT block. Do not invent FIR numbers, accused ids, names, scores, or relationships.
@@ -97,9 +105,14 @@ aparadhkavach:
       Do not use snake_case key names.
   sarvam:
     stt-url: ${SARVAM_STT_URL:http://localhost:8000}
+    stt-internal-key: ${STT_INTERNAL_API_KEY:}
+    connect-timeout-ms: ${SARVAM_STT_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SARVAM_STT_READ_TIMEOUT_MS:60000}
   vector:
     top-k: ${VECTOR_TOP_K:5}
     max-top-k: ${VECTOR_MAX_TOP_K:10}
+    # Typed-text ANN floor (D-113) — drop weak neighbors; FIR-id similarCases unchanged
+    text-min-similarity: ${VECTOR_TEXT_MIN_SIMILARITY:0.50}
     # Async boot warm (SimilarStartupProbe) — same demo FIR as keep-warm / D-064.
     warmup-fir-id: ${VECTOR_WARMUP_FIR_ID:FIR-003276}
   graph:
@@ -115,9 +128,7 @@ aparadhkavach:
     warmup-entity-id: ${GRAPH_WARMUP_ENTITY_ID:ACC-00044}
   resilience:
     circuit-breaker-threshold: ${CIRCUIT_BREAKER_THRESHOLD:3}
-  # Voyage AI (ADR-025) — no native Spring AI provider exists yet, so these aren't under
-  # spring.ai.* like the Anthropic block below. Consumed by the custom EmbeddingModel
-  # wrapper once that Week 1 business logic lands (not implemented yet).
+  # Voyage AI (ADR-025) — custom HTTP client (HttpVoyageEmbeddingClient); not under spring.ai.*.
   voyage:
     api-key: ${VOYAGE_API_KEY:local-dev-placeholder-not-a-real-key}
     embedding-model: ${EMBEDDING_MODEL:voyage-3-large}

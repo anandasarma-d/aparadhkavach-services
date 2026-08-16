@@ -44,6 +44,17 @@ public class FollowUpResolver {
     String text = followUpText.trim();
     CitationPool pool = CitationPool.from(conversation);
     if (pool.isEmpty() && pool.lastSeed() == null) {
+      // ChatPanel voice/text seed: first turn may be a bare ACC-/FIR- id (Design Flow 2).
+      Matcher seedMatcher = ENTITY_ID.matcher(text);
+      while (seedMatcher.find()) {
+        String id = seedMatcher.group(1).toUpperCase(Locale.ROOT);
+        if (id.startsWith("ACC-")) {
+          return new QuerySeed(QuerySeedKind.ACCUSED, id);
+        }
+        if (id.startsWith("FIR-")) {
+          return new QuerySeed(QuerySeedKind.FIR, id);
+        }
+      }
       throw new ValidationException(
           "No prior citations in this conversation to resolve the follow-up against. Ask with an ACC-/FIR- id first.");
     }

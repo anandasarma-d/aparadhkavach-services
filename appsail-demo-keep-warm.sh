@@ -176,6 +176,9 @@ while :; do
     "$ORCH/v1/firs/${SIM_A}/similarCases?limit=5" || failures=$((failures + 1))
   request "Orch Similar ${SIM_B}" \
     "$ORCH/v1/firs/${SIM_B}/similarCases?limit=5" || failures=$((failures + 1))
+  # D-111 typed-text similar — Voyage embed is cold-sensitive; warm before Slate Narrative mode
+  request_retry "Orch firs/search (narrative)" \
+    "$ORCH/v1/firs/search?q=vehicle%20theft%20from%20parking%20lot&limit=5" || failures=$((failures + 1))
   # Direct Investigation riskProfile — Orch ask soft-fails in 3s if this is cold
   request "Investigation risk ${RISK_A}" \
     "$IN/v1/accusedPersons/${RISK_A}:riskProfile" || failures=$((failures + 1))

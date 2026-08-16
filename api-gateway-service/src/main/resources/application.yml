@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: api-gateway-service
+  # Gateway only forwards raw bytes (DownstreamProxy). If multipart stays enabled,
+  # DispatcherServlet parses FormData before the proxy runs → empty body to Orch
+  # → Safari ChatPanel Mic fails with opaque "did not match the expected pattern".
+  servlet:
+    multipart:
+      enabled: false
 
 aparadhkavach:
   environment: ${APP_ENV:local}

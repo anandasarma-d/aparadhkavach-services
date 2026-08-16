@@ -9,14 +9,17 @@ import dev.aparadhkavach.orchestration.dto.FollowUpContext;
 import dev.aparadhkavach.orchestration.dto.QueryRequest;
 import dev.aparadhkavach.orchestration.dto.QueryResource;
 import dev.aparadhkavach.orchestration.dto.RelatedEntityResource;
+import dev.aparadhkavach.orchestration.dto.VoiceQueryResource;
 import dev.aparadhkavach.orchestration.query.config.QueryProperties;
 import dev.aparadhkavach.orchestration.query.conversation.Conversation;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessage;
 import dev.aparadhkavach.orchestration.query.conversation.ConversationMessageRole;
-import dev.aparadhkavach.orchestration.query.conversation.InMemoryConversationStore;
+import dev.aparadhkavach.orchestration.query.conversation.ConversationStore;
 import dev.aparadhkavach.orchestration.query.conversation.RelatedEntityRef;
 import dev.aparadhkavach.orchestration.query.model.QuerySeed;
 import dev.aparadhkavach.orchestration.query.model.QuerySeedKind;
+import dev.aparadhkavach.orchestration.stt.SpeechToTextClient;
+import dev.aparadhkavach.orchestration.stt.TranscriptionResult;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -26,29 +29,32 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B/D/F). Follow-ups resolve to ACC-/FIR-
+ * Conversation CRUD + ask-with-thread (mvp2/12 Step A/B/D/F/G). Follow-ups resolve to ACC-/FIR-
  * seeds from prior citations, or to a similar-cases PgVector ask (Step F), then pack a bounded
- * history window into Claude (Step D).
+ * history window into Claude (Step D). Persistence via {@link ConversationStore} (JDBC on Lane B).
  */
 @Service
 public class ConversationService {
 
   private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
 
-  private final InMemoryConversationStore store;
+  private final ConversationStore store;
   private final QueryService queryService;
   private final FollowUpResolver followUpResolver;
   private final QueryProperties queryProperties;
+  private final SpeechToTextClient speechToTextClient;
 
   public ConversationService(
-      InMemoryConversationStore store,
+      ConversationStore store,
       QueryService queryService,
       FollowUpResolver followUpResolver,
-      QueryProperties queryProperties) {
+      QueryProperties queryProperties,
+      SpeechToTextClient speechToTextClient) {
     this.store = store;
     this.queryService = queryService;
     this.followUpResolver = followUpResolver;
     this.queryProperties = queryProperties;
+    this.speechToTextClient = speechToTextClient;
   }
 
   public ConversationCreatedResource create() {
@@ -141,7 +147,48 @@ public class ConversationService {
     return answer;
   }
 
-  private static void appendTurns(
+  /**
+   * mvp2/12 Step H — ChatPanel voice (Design Flow 2). Transcribe via STT, then same ask path as
+   * typed ChatPanel input. Empty conversation + spoken ACC-/FIR- seeds the thread; otherwise
+   * follow-up resolution applies. Audio is not stored (ADR-027).
+   */
+  public VoiceQueryResource askVoice(
+      String conversationId,
+      byte[] audioBytes,
+      String filename,
+      String languageHint,
+      FollowUpContext followUpContext) {
+    String cid = conversationId == null ? "" : conversationId.trim();
+    if (cid.isEmpty()) {
+      cid = store.create().conversationId();
+      log.info("voice ask created conversationId={}", cid);
+    }
+    TranscriptionResult transcription =
+        speechToTextClient.transcribe(audioBytes, filename, languageHint);
+    if (transcription.isBlank()) {
+      throw new ValidationException("Could not understand the audio; try again or type the question");
+    }
+    log.info(
+        "voice ask conversationId={} chars={} conf={} lang={}",
+        cid,
+        transcription.transcription().length(),
+        transcription.confidence(),
+        transcription.detectedLanguage());
+    QueryRequest request =
+        new QueryRequest(
+            null, null, cid, transcription.transcription(), followUpContext);
+    QueryResource answer = ask(cid, request);
+    return VoiceQueryResource.from(
+        answer,
+        new VoiceQueryResource.TranscriptionMeta(
+            transcription.transcription(),
+            transcription.confidence(),
+            transcription.confidenceTier(),
+            transcription.needsConfirmation(),
+            transcription.detectedLanguage()));
+  }
+
+  private void appendTurns(
       Conversation conversation,
       String userText,
       String accusedId,
@@ -149,7 +196,8 @@ public class ConversationService {
       QueryResource answer) {
     List<RelatedEntityRef> relatedRefs = toRefs(answer.relatedEntities());
 
-    conversation.append(
+    store.append(
+        conversation.conversationId(),
         new ConversationMessage(
             UUID.randomUUID().toString(),
             ConversationMessageRole.USER,
@@ -161,8 +209,8 @@ public class ConversationService {
             List.of(),
             List.of(),
             List.of()));
-
-    conversation.append(
+    store.append(
+        conversation.conversationId(),
         new ConversationMessage(
             UUID.randomUUID().toString(),
             ConversationMessageRole.ASSISTANT,
@@ -195,7 +243,7 @@ public class ConversationService {
       return existing.get();
     }
 
-    // Ephemeral store miss (AppSail recycle / another instance).
+    // Store miss (TTL expiry / brand-new id). Client followUpContext remains a fallback.
     if (hasFollowUp && hasUsableContext(request)) {
       log.warn(
           "conversation miss conversationId={} — hydrating from followUpContext",
@@ -229,12 +277,13 @@ public class ConversationService {
     return hasEntities || hasSeed;
   }
 
-  private static Conversation hydrateFromContext(Conversation conversation, FollowUpContext ctx) {
+  private Conversation hydrateFromContext(Conversation conversation, FollowUpContext ctx) {
     List<String> evidence =
         ctx.evidenceSources() == null ? List.of() : List.copyOf(ctx.evidenceSources());
     List<String> firs = ctx.relatedFirs() == null ? List.of() : List.copyOf(ctx.relatedFirs());
     List<RelatedEntityRef> related = toRefs(ctx.relatedEntities());
-    conversation.append(
+    store.append(
+        conversation.conversationId(),
         new ConversationMessage(
             UUID.randomUUID().toString(),
             ConversationMessageRole.ASSISTANT,
@@ -246,7 +295,8 @@ public class ConversationService {
             evidence,
             firs,
             related));
-    return conversation;
+    // Reload so FollowUpResolver sees the seed turn (JDBC) / same map entry (memory).
+    return store.require(conversation.conversationId());
   }
 
   private static boolean hasSeed(QueryRequest request) {

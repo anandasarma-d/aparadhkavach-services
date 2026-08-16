@@ -27,6 +27,7 @@ class RolePathAllowlistTest {
   void investigatorMayUseConversations() {
     assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/conversations")).isTrue();
     assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/conversations/abc/queries")).isTrue();
+    assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/conversations/abc/queries:voice")).isTrue();
   }
 
   @Test

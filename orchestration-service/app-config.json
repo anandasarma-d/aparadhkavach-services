@@ -17,13 +17,14 @@
     "QUERY_JURISDICTION": "Karnataka",
     "EMBEDDING_DIMENSIONS": "1024",
     "SARVAM_STT_URL": "http://localhost:8000",
+    "STT_INTERNAL_API_KEY": "local-dev-placeholder-not-a-real-secret",
     "VECTOR_TOP_K": "5",
     "GRAPH_TRAVERSAL_DEPTH": "3",
     "CIRCUIT_BREAKER_THRESHOLD": "3",
     "VOYAGE_API_KEY": "local-dev-placeholder-not-a-real-secret",
     "EMBEDDING_MODEL": "voyage-3-large"
   },
-  "memory": 256,
+  "memory": 1024,
   "scripts": {},
   "platform": "javase"
 }

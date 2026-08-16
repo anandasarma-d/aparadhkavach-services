@@ -99,6 +99,8 @@ public class DownstreamProxy {
     String query = request.getQueryString();
     String targetUri = base + request.getRequestURI() + (query != null ? "?" + query : "");
 
+    // Must read raw bytes before any servlet multipart resolver consumes the stream
+    // (see spring.servlet.multipart.enabled=false on this service).
     byte[] body = request.getInputStream().readAllBytes();
     HttpMethod method = HttpMethod.valueOf(request.getMethod());
 

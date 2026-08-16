@@ -4,9 +4,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Voyage AI credentials (ADR-025). No native Spring AI provider exists yet, so this isn't bound
- * under {@code spring.ai.*} — consumed by the custom {@code EmbeddingModel} wrapper once that Week
- * 1 business logic lands.
+ * Voyage AI credentials (ADR-025). Bound under {@code aparadhkavach.voyage} — consumed by {@code
+ * HttpVoyageEmbeddingClient} for typed-text similar (not under {@code spring.ai.*}).
  */
 @Component
 @ConfigurationProperties(prefix = "aparadhkavach.voyage")

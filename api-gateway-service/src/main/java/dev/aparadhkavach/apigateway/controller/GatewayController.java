@@ -52,9 +52,26 @@ public class GatewayController {
     return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }
 
+  /** Typed-text similar FIRs (Auto/18 free-text / mvp2 D-111) — colon form; not under /v1/firs/. */
+  @RequestMapping("/v1/firs:search")
+  public ResponseEntity<byte[]> routeFirSearchToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
+  }
+
   /** F3 / mvp2/11 — custom method on queries (colon form; not under /v1/queries/). */
   @RequestMapping("/v1/queries:ask")
   public ResponseEntity<byte[]> routeAskToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
+  }
+
+  /**
+   * Voice ask (mvp2/12 Step H / D-115) — colon form under conversations. Explicit mapping mirrors
+   * {@code queries:ask} so path matching cannot drop {@code :voice} on some containers.
+   */
+  @RequestMapping("/v1/conversations/*/queries:voice")
+  public ResponseEntity<byte[]> routeVoiceToOrchestration(HttpServletRequest request)
       throws IOException {
     return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }

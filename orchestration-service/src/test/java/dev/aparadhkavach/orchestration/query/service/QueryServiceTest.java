@@ -163,7 +163,7 @@ class QueryServiceTest {
   }
 
   private static SimilarCasesService stubSimilarCasesService() {
-    return new SimilarCasesService(null, new VectorProperties()) {
+    return new SimilarCasesService(null, new VectorProperties(), null) {
       @Override
       public SimilarCasesResult findSimilar(String rawFirId, Integer requestedLimit) {
         return new SimilarCasesResult(

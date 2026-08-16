@@ -22,6 +22,8 @@ import dev.aparadhkavach.orchestration.search.config.VectorProperties;
 import dev.aparadhkavach.orchestration.search.model.SimilarCase;
 import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
 import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
+import dev.aparadhkavach.orchestration.stt.SpeechToTextClient;
+import dev.aparadhkavach.orchestration.stt.TranscriptionResult;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -126,7 +128,27 @@ class ConversationServiceTest {
         .isInstanceOf(ResourceNotFoundException.class);
   }
 
+  @Test
+  void askVoice_emptyConversation_seedsFromTranscript() {
+    SpeechToTextClient stt =
+        (audioBytes, filename, languageHint) ->
+            new TranscriptionResult("Ask about ACC-00040", 0.95, "high", false, "en");
+    ConversationService conversations = newConversationService(stt);
+
+    var voice = conversations.askVoice(null, new byte[] {1, 2, 3}, "seed.webm", "en", null);
+
+    assertThat(voice.conversationId()).isNotBlank();
+    assertThat(voice.transcription()).contains("ACC-00040");
+    assertThat(conversations.get(voice.conversationId()).messages()).hasSize(2);
+  }
+
   private static ConversationService newConversationService() {
+    return newConversationService(
+        (audioBytes, filename, languageHint) ->
+            new TranscriptionResult("Tell me about FIR-003276", 0.92, "high", false, "en"));
+  }
+
+  private static ConversationService newConversationService(SpeechToTextClient stt) {
     GraphProperties props = new GraphProperties();
     props.setNetworkDefaultDepth(1);
     props.setNetworkMaxDepth(2);
@@ -166,7 +188,7 @@ class ConversationServiceTest {
     ClaudeQueryBridge bridge =
         ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
     SimilarCasesService similar =
-        new SimilarCasesService(null, new VectorProperties()) {
+        new SimilarCasesService(null, new VectorProperties(), null) {
           @Override
           public SimilarCasesResult findSimilar(String rawFirId, Integer requestedLimit) {
             return new SimilarCasesResult(
@@ -182,6 +204,7 @@ class ConversationServiceTest {
         new InMemoryConversationStore(),
         queryService,
         new FollowUpResolver(),
-        new QueryProperties());
+        new QueryProperties(),
+        stt);
   }
 }

@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** In-memory conversation thread (ephemeral on AppSail restart — mvp2/12 Step A). */
+/** Conversation thread domain object (loaded from {@link ConversationStore} — mvp2/12 A/G). */
 public final class Conversation {
 
   private final String conversationId;

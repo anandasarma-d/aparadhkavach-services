@@ -1,9 +1,12 @@
 package dev.aparadhkavach.apigateway.proxy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.binaryEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -171,6 +174,52 @@ class DownstreamProxyTest {
         getRequestedFor(urlEqualTo("/v1/auth/me"))
             .withHeader("Authorization", equalTo("Bearer test-token"))
             .withoutHeader("Origin"));
+  }
+
+  @Test
+  void forwardsMultipartVoiceBodyBytesIntact() throws Exception {
+    // ChatPanel Mic → Gateway must not drop FormData (D-115 / Safari opaque JSON parse).
+    byte[] multipart =
+        ("------bound\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"chat.webm\"\r\n"
+                + "Content-Type: audio/webm\r\n\r\n"
+                + "fake-audio-bytes\r\n"
+                + "------bound--\r\n")
+            .getBytes(StandardCharsets.UTF_8);
+    byte[] downstreamBody =
+        "{\"conversationId\":\"c1\",\"transcription\":\"ACC-00040\"}".getBytes(StandardCharsets.UTF_8);
+    wireMock.stubFor(
+        post(urlEqualTo("/v1/conversations/c1/queries:voice"))
+            .willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody(downstreamBody)));
+
+    HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+    Mockito.when(request.getMethod()).thenReturn("POST");
+    Mockito.when(request.getRequestURI()).thenReturn("/v1/conversations/c1/queries:voice");
+    Mockito.when(request.getQueryString()).thenReturn(null);
+    Mockito.when(request.getInputStream())
+        .thenReturn(new DelegatingServletInputStream(multipart));
+    Vector<String> headerNames = new Vector<>();
+    headerNames.add("Content-Type");
+    headerNames.add("Authorization");
+    Mockito.when(request.getHeaderNames()).thenReturn(headerNames.elements());
+    Mockito.when(request.getHeaders("Content-Type"))
+        .thenReturn(
+            Collections.enumeration(
+                Collections.singletonList("multipart/form-data; boundary=----bound")));
+    Mockito.when(request.getHeaders("Authorization"))
+        .thenReturn(Collections.enumeration(Collections.singletonList("Bearer test-token")));
+
+    ResponseEntity<byte[]> response = proxy.forward(wireMock.baseUrl(), request);
+
+    assertEquals(200, response.getStatusCode().value());
+    assertArrayEquals(downstreamBody, response.getBody());
+    wireMock.verify(
+        postRequestedFor(urlEqualTo("/v1/conversations/c1/queries:voice"))
+            .withHeader("Authorization", equalTo("Bearer test-token"))
+            .withRequestBody(binaryEqualTo(multipart)));
   }
 
   /** Minimal ServletInputStream for mocked requests. */
