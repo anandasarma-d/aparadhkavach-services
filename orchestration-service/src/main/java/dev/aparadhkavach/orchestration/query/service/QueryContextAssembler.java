@@ -22,6 +22,7 @@ import static dev.aparadhkavach.orchestration.query.QueryContextConstants.NODES_
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.OFFICER_QUESTION;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.PROBE_FIR;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RETRIEVAL_MODE;
+import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RETRIEVAL_RECORDS_NL;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RETRIEVAL_SIMILAR;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_ACCUSED_ID;
 import static dev.aparadhkavach.orchestration.query.QueryContextConstants.RISK_ADDRESS_DISTRICT_ID;
@@ -107,10 +108,31 @@ final class QueryContextAssembler {
     if (officerQuestion != null && !officerQuestion.isBlank()) {
       sb.append(OFFICER_QUESTION).append(officerQuestion.trim()).append('\n');
     }
+    appendSimilarHits(sb, hits);
+    return sb.toString();
+  }
+
+  /**
+   * mvp2/20 — open NL discovery: officer question + ANN hits (no probe FIR / Neo4j). Same hit
+   * rows as typed Similar; Claude writes the conversational envelope.
+   */
+  static String assembleRecordsNl(String officerQuestion, List<SimilarCase> hits) {
+    StringBuilder sb = new StringBuilder(1024);
+    sb.append(RETRIEVAL_MODE).append(RETRIEVAL_RECORDS_NL).append('\n');
+    sb.append(SEED_KIND).append(RETRIEVAL_RECORDS_NL).append('\n');
+    sb.append(SEED_ID).append("TEXT_QUERY").append('\n');
+    if (officerQuestion != null && !officerQuestion.isBlank()) {
+      sb.append(OFFICER_QUESTION).append(officerQuestion.trim()).append('\n');
+    }
+    appendSimilarHits(sb, hits);
+    return sb.toString();
+  }
+
+  private static void appendSimilarHits(StringBuilder sb, List<SimilarCase> hits) {
     sb.append(SIMILAR_HITS_HEADER);
     if (hits == null || hits.isEmpty()) {
       sb.append("  (none)\n");
-      return sb.toString();
+      return;
     }
     for (SimilarCase hit : hits) {
       sb.append(HIT_PREFIX)
@@ -127,7 +149,6 @@ final class QueryContextAssembler {
           .append(nullToDash(hit.status()))
           .append('\n');
     }
-    return sb.toString();
   }
 
   static List<String> defaultEvidence(

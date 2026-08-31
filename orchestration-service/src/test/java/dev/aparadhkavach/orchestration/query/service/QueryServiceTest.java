@@ -17,6 +17,7 @@ import dev.aparadhkavach.orchestration.graph.model.NetworkNode;
 import dev.aparadhkavach.orchestration.graph.repository.EntityNetworkRepository;
 import dev.aparadhkavach.orchestration.graph.service.EntityNetworkService;
 import dev.aparadhkavach.orchestration.search.config.VectorProperties;
+import dev.aparadhkavach.orchestration.search.model.FirTextSearchResult;
 import dev.aparadhkavach.orchestration.search.model.SimilarCase;
 import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
 import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
@@ -162,6 +163,61 @@ class QueryServiceTest {
     assertThat(result.answer()).contains("Answer generation is not configured");
   }
 
+  @Test
+  void searchRecords_usesTextAnnHitsWithoutNeo4j() {
+    AtomicInteger depthSeen = new AtomicInteger(-1);
+    EntityNetworkService networkService = recordingNetworkService(depthSeen, sampleNetwork());
+    InvestigationRiskProfileClient investigation =
+        new InvestigationRiskProfileClient(RestClient.create()) {
+          @Override
+          public Optional<InvestigationRiskProfileSnapshot> findRiskProfile(String accusedId) {
+            return Optional.empty();
+          }
+        };
+    ClaudeQueryBridge bridge =
+        ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
+    QueryService service =
+        new QueryService(networkService, investigation, bridge, stubSimilarCasesService());
+
+    QueryResource result =
+        service.searchRecords("vehicle theft near parking lot", "conv-nl", 5);
+
+    assertThat(depthSeen.get()).isEqualTo(-1);
+    assertThat(result.relatedFirs()).contains("FIR-999001", "FIR-999002");
+    assertThat(result.conversationId()).isEqualTo("conv-nl");
+    assertThat(result.answer()).contains("Answer generation is not configured");
+  }
+
+  @Test
+  void searchRecords_emptyHits_returnsHonestMessageWithoutClaude() {
+    AtomicInteger depthSeen = new AtomicInteger(-1);
+    EntityNetworkService networkService = recordingNetworkService(depthSeen, sampleNetwork());
+    InvestigationRiskProfileClient investigation =
+        new InvestigationRiskProfileClient(RestClient.create()) {
+          @Override
+          public Optional<InvestigationRiskProfileSnapshot> findRiskProfile(String accusedId) {
+            return Optional.empty();
+          }
+        };
+    ClaudeQueryBridge bridge =
+        ClaudeQueryBridge.forTests(new ObjectMapper(), "local-dev-placeholder-not-a-real-key");
+    SimilarCasesService emptySearch =
+        new SimilarCasesService(null, new VectorProperties(), null) {
+          @Override
+          public FirTextSearchResult searchByText(String rawQuery, Integer requestedLimit) {
+            return new FirTextSearchResult(rawQuery.trim(), 5, List.of());
+          }
+        };
+    QueryService service = new QueryService(networkService, investigation, bridge, emptySearch);
+
+    QueryResource result = service.searchRecords("murder cases in Chitradurga", null, null);
+
+    assertThat(depthSeen.get()).isEqualTo(-1);
+    assertThat(result.relatedFirs()).isEmpty();
+    assertThat(result.answer()).contains("similarity floor");
+    assertThat(result.confidenceScore()).isEqualTo(0.0);
+  }
+
   private static SimilarCasesService stubSimilarCasesService() {
     return new SimilarCasesService(null, new VectorProperties(), null) {
       @Override
@@ -172,6 +228,16 @@ class QueryServiceTest {
             List.of(
                 new SimilarCase("FIR-999001", 0.94, "Mysuru", "Burglary", null, "UI"),
                 new SimilarCase("FIR-999002", 0.91, "Kodagu", "Burglary", null, "UI")));
+      }
+
+      @Override
+      public FirTextSearchResult searchByText(String rawQuery, Integer requestedLimit) {
+        return new FirTextSearchResult(
+            rawQuery.trim(),
+            5,
+            List.of(
+                new SimilarCase("FIR-999001", 0.64, "Mysuru", "Theft", null, "UI"),
+                new SimilarCase("FIR-999002", 0.61, "Udupi", "Theft", null, "UI")));
       }
     };
   }

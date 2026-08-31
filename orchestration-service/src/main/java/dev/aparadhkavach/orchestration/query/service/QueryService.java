@@ -15,6 +15,7 @@ import dev.aparadhkavach.orchestration.query.model.QuerySeedKind;
 import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.AskTask;
 import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.ClaudeAnswer;
 import dev.aparadhkavach.orchestration.query.service.ClaudeQueryBridge.RelatedEntity;
+import dev.aparadhkavach.orchestration.search.model.FirTextSearchResult;
 import dev.aparadhkavach.orchestration.search.model.SimilarCase;
 import dev.aparadhkavach.orchestration.search.model.SimilarCasesResult;
 import dev.aparadhkavach.orchestration.search.service.SimilarCasesService;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
  * F3 / mvp2/11 ask path: Investigation risk (when accused) + Neo4j depth <strong>1</strong> only →
  * one Claude call → conversational envelope. Conversation persistence is owned by {@link
  * ConversationService} (mvp2/12 Step A). Step F similar-cases asks use {@link #askSimilar}.
+ * mvp2/20 records NL uses {@link #searchRecords}.
  */
 @Service
 public class QueryService {
@@ -231,6 +233,98 @@ public class QueryService {
     log.info(
         "ask done mode=similar seed={} conversationId={} latencyMs={}",
         firId,
+        threadId,
+        latencyMs);
+    return new QueryResource(
+        UUID.randomUUID().toString(),
+        threadId,
+        model.answer(),
+        evidence,
+        relatedFirs,
+        relatedEntities,
+        model.confidenceScore(),
+        model.reasoningSummary(),
+        latencyMs);
+  }
+
+  /**
+   * mvp2/20 K1 thin slice — plain-English discovery: Voyage → PgVector ANN (typed-Similar floor)
+   * → Claude over those hits. No ACC-/FIR- seed; no Neo4j. Distinct from {@link #askSimilar}
+   * (probe FIR) and from GET {@code /v1/firs/search} (ranked table only).
+   */
+  public QueryResource searchRecords(String rawQuery, String conversationId, Integer limit) {
+    long started = System.currentTimeMillis();
+    long t0 = System.currentTimeMillis();
+    FirTextSearchResult search = similarCasesService.searchByText(rawQuery, limit);
+    List<SimilarCase> hits = search.similarCases();
+    String q = search.query();
+    log.info(
+        "ask phase=recordsNl hits={} tookMs={}",
+        hits.size(),
+        System.currentTimeMillis() - t0);
+
+    String threadId =
+        conversationId == null || conversationId.isBlank()
+            ? UUID.randomUUID().toString()
+            : conversationId.trim();
+
+    if (hits.isEmpty()) {
+      long latencyMs = System.currentTimeMillis() - started;
+      log.info("ask done mode=recordsNl hits=0 conversationId={} latencyMs={}", threadId, latencyMs);
+      return new QueryResource(
+          UUID.randomUUID().toString(),
+          threadId,
+          "No FIRs met the narrative similarity floor for this question. Try a short modus phrase"
+              + " (e.g. vehicle theft near parking lot), not a crime-label list query. This is"
+              + " narrative closeness — not a district or crime-type SQL filter.",
+          List.of(),
+          List.of(),
+          List.of(),
+          0.0,
+          "Empty ANN result after text min-similarity floor (same as typed Similar).",
+          latencyMs);
+    }
+
+    String context = QueryContextAssembler.assembleRecordsNl(q, hits);
+    t0 = System.currentTimeMillis();
+    ClaudeAnswer model =
+        claudeQueryBridge.complete(context, "TEXT_QUERY", null, AskTask.RECORDS_NL);
+    log.info(
+        "ask phase=claude mode=recordsNl confidence={} tookMs={}",
+        model.confidenceScore(),
+        System.currentTimeMillis() - t0);
+
+    Set<String> annIds = new LinkedHashSet<>();
+    for (SimilarCase hit : hits) {
+      if (hit.firId() != null && !hit.firId().isBlank()) {
+        annIds.add(hit.firId());
+      }
+    }
+    List<String> annList = List.copyOf(annIds);
+    List<String> relatedFirs =
+        filterToAllowed(
+            model.relatedFirs().isEmpty() ? annList : model.relatedFirs(), annIds);
+    if (relatedFirs.isEmpty()) {
+      relatedFirs = annList;
+    }
+    List<RelatedEntityResource> relatedEntities =
+        dedupeEntities(
+            model.relatedEntities().isEmpty()
+                ? List.of()
+                : mapEntities(model.relatedEntities()),
+            "TEXT_QUERY",
+            relatedFirs);
+    List<String> evidence =
+        evidenceMinusRelated(
+            mergeEvidence(model.evidenceSources(), annList),
+            "TEXT_QUERY",
+            relatedFirs,
+            relatedEntities);
+
+    long latencyMs = System.currentTimeMillis() - started;
+    log.info(
+        "ask done mode=recordsNl hits={} conversationId={} latencyMs={}",
+        hits.size(),
         threadId,
         latencyMs);
     return new QueryResource(

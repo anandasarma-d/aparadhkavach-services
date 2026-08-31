@@ -66,6 +66,13 @@ public class GatewayController {
     return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
   }
 
+  /** mvp2/20 — plain-English records discovery (NL → ANN → Claude). */
+  @RequestMapping("/v1/queries:searchRecords")
+  public ResponseEntity<byte[]> routeSearchRecordsToOrchestration(HttpServletRequest request)
+      throws IOException {
+    return downstreamProxy.forward(downstreamServices.getOrchestrationServiceUrl(), request);
+  }
+
   /**
    * Voice ask (mvp2/12 Step H / D-115) — colon form under conversations. Explicit mapping mirrors
    * {@code queries:ask} so path matching cannot drop {@code :voice} on some containers.

@@ -420,7 +420,15 @@ public class ClaudeQueryBridge {
             + " needed). Rank by the given similarity scores; do not invent case links or claim"
             + " the cases are the same offender. Use plain language; never say CONTEXT,"
             + " PRIOR_TURNS, PgVector, Voyage, or embedding. Answer only from CONTEXT"
-            + " (PRIOR_TURNS is continuity only). Put similar FIR ids in relatedFirs.");
+            + " (PRIOR_TURNS is continuity only). Put similar FIR ids in relatedFirs."),
+    RECORDS_NL(
+        "In under 120 words across 2–4 short paragraphs (separate with blank lines),"
+            + " answer the officerQuestion using only the FIRs listed under similarHits."
+            + " Cite only FIR ids that appear in similarHits. Rank by the given similarity scores;"
+            + " do not invent case links, districts, or crime types missing from the hits."
+            + " If similarHits is empty, say no matching FIRs met the similarity floor and suggest"
+            + " a short modus-style phrase. Use plain language; never say CONTEXT, PRIOR_TURNS,"
+            + " PgVector, Voyage, or embedding. Put cited FIR ids in relatedFirs.");
 
     private final String userTask;
 

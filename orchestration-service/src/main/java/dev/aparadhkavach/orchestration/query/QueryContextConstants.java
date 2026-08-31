@@ -42,6 +42,8 @@ public final class QueryContextConstants {
   /** mvp2/12 Step F — PgVector similar-cases CONTEXT. */
   public static final String RETRIEVAL_MODE = "retrievalMode=";
   public static final String RETRIEVAL_SIMILAR = "SIMILAR_CASES";
+  /** mvp2/20 — open NL discovery (no probe FIR). */
+  public static final String RETRIEVAL_RECORDS_NL = "RECORDS_NL";
   public static final String PROBE_FIR = "probeFirId=";
   public static final String OFFICER_QUESTION = "officerQuestion=";
   public static final String SIMILAR_HITS_HEADER = "similarHits:\n";

@@ -14,6 +14,11 @@ class RolePathAllowlistTest {
   }
 
   @Test
+  void investigatorMaySearchRecords() {
+    assertThat(allowlist.isAllowed("INVESTIGATOR", "/v1/queries:searchRecords")).isTrue();
+  }
+
+  @Test
   void supervisorMayAsk() {
     assertThat(allowlist.isAllowed("SUPERVISOR", "/v1/queries:ask")).isTrue();
   }
@@ -21,6 +26,11 @@ class RolePathAllowlistTest {
   @Test
   void analystMayNotAsk() {
     assertThat(allowlist.isAllowed("ANALYST", "/v1/queries:ask")).isFalse();
+  }
+
+  @Test
+  void analystMayNotSearchRecords() {
+    assertThat(allowlist.isAllowed("ANALYST", "/v1/queries:searchRecords")).isFalse();
   }
 
   @Test
